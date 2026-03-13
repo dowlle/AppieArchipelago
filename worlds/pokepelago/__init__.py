@@ -6,7 +6,7 @@ from worlds.generic.Rules import set_rule
 from .Items import PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
                         TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS)
-from .Options import PokepelagoOptions, pokepelago_option_groups
+from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
 from .data import (POKEMON_DATA, GAME_REGIONS, REGION_RANGES, STARTERS_BY_REGION, get_pokemon_region,
                    LEGENDARY_SUB_IDS, LEGENDARY_BOX_IDS, LEGENDARY_MYTHIC_IDS,
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
@@ -39,6 +39,13 @@ class PokepelagoWorld(World):
     location_name_to_id = location_table
 
     def generate_early(self):
+        # Backward compat: merge legacy include_kanto/johto/… toggles into regions set
+        o = self.options
+        legacy_regions = {region for opt_name, region in _LEGACY_REGION_MAP.items()
+                          if getattr(o, opt_name).value}
+        if legacy_regions:
+            o.regions.value = o.regions.value | legacy_regions
+
         # Build list of active regions in canonical order
         rrc = self.options.random_region_count.value
         if rrc == -1:  # "random" — random count + random selection
