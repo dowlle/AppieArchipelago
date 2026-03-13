@@ -1169,18 +1169,18 @@ PARADOX_IDS: frozenset = frozenset([
     1020, 1021, 1022, 1023,                                 # Gouging Fire, Raging Bolt, Iron Boulder, Iron Crown
 ])
 
-# Stone-only evolutions — require the matching evolutionary stone item.
-# Only Pokémon whose ONLY path to that evolution form is via a specific stone are included.
+# Stone-evolved Pokémon — require the matching evolutionary stone item.
+# Uses latest-gen evolution methods (e.g. Magnezone uses Thunder Stone in Gen 8+).
 # Key = stone item name suffix (e.g. "fire" → "Fire Stone"), value = frozenset of Pokémon IDs.
 STONE_EVO_GROUPS: dict = {
-    "fire":    frozenset([38, 59, 136, 514]),               # Ninetales, Arcanine, Flareon, Simisear
-    "water":   frozenset([62, 91, 121, 134, 272, 516]),     # Poliwrath, Cloyster, Starmie, Vaporeon, Ludicolo, Simipour
-    "thunder": frozenset([26, 135, 604]),                   # Raichu, Jolteon, Eelektross
-    "leaf":    frozenset([45, 71, 103, 275, 512]),          # Vileplume, Victreebel, Exeggutor, Shiftry, Simisage
-    "moon":    frozenset([31, 34, 36, 40, 301, 518]),       # Nidoqueen, Nidoking, Clefable, Wigglytuff, Delcatty, Musharna
-    "sun":     frozenset([182, 192, 547, 549, 695]),        # Bellossom, Sunflora, Whimsicott, Lilligant, Heliolisk
-    "shiny":   frozenset([407, 468, 573, 671]),             # Roserade, Togekiss, Cinccino, Florges
-    "dusk":    frozenset([429, 430, 609, 681]),             # Mismagius, Honchkrow, Chandelure, Aegislash
-    "dawn":    frozenset([475, 478]),                       # Gallade, Froslass
-    "ice":     frozenset([471]),                            # Glaceon
+    "fire":    frozenset([38, 59, 136, 514, 952]),             # Ninetales, Arcanine, Flareon, Simisear, Scovillain
+    "water":   frozenset([62, 91, 121, 134, 272, 516]),        # Poliwrath, Cloyster, Starmie, Vaporeon, Ludicolo, Simipour
+    "thunder": frozenset([26, 135, 462, 476, 604, 738, 939]),  # Raichu, Jolteon, Magnezone, Probopass, Eelektross, Vikavolt, Bellibolt
+    "leaf":    frozenset([45, 71, 103, 275, 470, 512]),        # Vileplume, Victreebel, Exeggutor, Shiftry, Leafeon, Simisage
+    "moon":    frozenset([31, 34, 36, 40, 301, 518]),          # Nidoqueen, Nidoking, Clefable, Wigglytuff, Delcatty, Musharna
+    "sun":     frozenset([182, 192, 547, 549, 695]),           # Bellossom, Sunflora, Whimsicott, Lilligant, Heliolisk
+    "shiny":   frozenset([407, 468, 573, 671]),                # Roserade, Togekiss, Cinccino, Florges
+    "dusk":    frozenset([429, 430, 609, 681]),                # Mismagius, Honchkrow, Chandelure, Aegislash
+    "dawn":    frozenset([475, 478]),                          # Gallade, Froslass
+    "ice":     frozenset([471, 740, 975]),                     # Glaceon, Crabominable, Cetitan
 }

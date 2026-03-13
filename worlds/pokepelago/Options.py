@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from Options import PerGameCommonOptions, Toggle, Choice, Range, NamedRange, OptionCounter, OptionSet, OptionGroup
+from Options import PerGameCommonOptions, Toggle, Choice, Range, NamedRange, OptionCounter, OptionSet, OptionGroup, Visibility
 from .data import GAME_REGIONS
 
 
@@ -240,6 +240,32 @@ class StoneLocks(Toggle):
     default = 0
 
 
+# ── Legacy backward-compat toggles (hidden from UI, consumed by generate_early) ─────
+# Old YAMLs used include_kanto/include_johto/… instead of the unified "regions" OptionSet.
+class _LegacyRegionToggle(Toggle):
+    """Deprecated — use the 'regions' option instead."""
+    visibility = Visibility.none  # hidden from options UI
+    default = 0
+
+class IncludeKanto(_LegacyRegionToggle): display_name = "Include Kanto (deprecated)"
+class IncludeJohto(_LegacyRegionToggle): display_name = "Include Johto (deprecated)"
+class IncludeHoenn(_LegacyRegionToggle): display_name = "Include Hoenn (deprecated)"
+class IncludeSinnoh(_LegacyRegionToggle): display_name = "Include Sinnoh (deprecated)"
+class IncludeUnova(_LegacyRegionToggle): display_name = "Include Unova (deprecated)"
+class IncludeKalos(_LegacyRegionToggle): display_name = "Include Kalos (deprecated)"
+class IncludeAlola(_LegacyRegionToggle): display_name = "Include Alola (deprecated)"
+class IncludeGalar(_LegacyRegionToggle): display_name = "Include Galar (deprecated)"
+class IncludeHisui(_LegacyRegionToggle): display_name = "Include Hisui (deprecated)"
+class IncludePaldea(_LegacyRegionToggle): display_name = "Include Paldea (deprecated)"
+
+_LEGACY_REGION_MAP: dict[str, str] = {
+    "include_kanto": "Kanto", "include_johto": "Johto", "include_hoenn": "Hoenn",
+    "include_sinnoh": "Sinnoh", "include_unova": "Unova", "include_kalos": "Kalos",
+    "include_alola": "Alola", "include_galar": "Galar", "include_hisui": "Hisui",
+    "include_paldea": "Paldea",
+}
+
+
 class IncludeShinies(Toggle):
     """Add Shiny Charm filler items to the item pool.
     Receiving a Shiny Charm makes a random Pokemon in your caught list display
@@ -274,6 +300,17 @@ class PokepelagoOptions(PerGameCommonOptions):
     trap_chance: TrapChance
     trap_weights: TrapWeights
     filler_weights: FillerWeights
+    # Legacy region toggles (hidden, backward compat only)
+    include_kanto: IncludeKanto
+    include_johto: IncludeJohto
+    include_hoenn: IncludeHoenn
+    include_sinnoh: IncludeSinnoh
+    include_unova: IncludeUnova
+    include_kalos: IncludeKalos
+    include_alola: IncludeAlola
+    include_galar: IncludeGalar
+    include_hisui: IncludeHisui
+    include_paldea: IncludePaldea
 
 
 pokepelago_option_groups: list[OptionGroup] = [
