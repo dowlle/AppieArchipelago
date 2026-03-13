@@ -112,7 +112,7 @@ class FillerWeights(OptionCounter):
     def from_any(cls, data):
         if isinstance(data, dict):
             merged = dict(cls.default)
-            merged.update(data)
+            merged.update({k: v for k, v in data.items() if k in cls.valid_keys})
             return cls(merged)
         return super().from_any(data)
 
@@ -135,7 +135,7 @@ class TrapWeights(OptionCounter):
     def from_any(cls, data):
         if isinstance(data, dict):
             merged = dict(cls.default)
-            merged.update(data)
+            merged.update({k: v for k, v in data.items() if k in cls.valid_keys})
             return cls(merged)
         return super().from_any(data)
 
