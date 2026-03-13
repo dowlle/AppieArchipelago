@@ -70,6 +70,8 @@ prev_data.py
 profile_gen.py
 test_fill.py
 worlds/pokepelago/_dev/
+frontmatter.json
+.frontmatter/
 
 
 # stubgen output
@@ -209,3 +211,9 @@ worlds/pokepelago.apworld
 pokepelago.apworld
 package_apworld.py
 releases/pokepelago-v0.3.2.apworld
+fuzzer/
+fuzz.py
+hooks/
+run_fuzz.sh
+/fuzz_output/
+/fuzz_results/
