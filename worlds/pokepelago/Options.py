@@ -99,13 +99,11 @@ class FillerWeights(OptionCounter):
     """Controls the relative weight of each filler item category.
     Higher values mean that category appears more often. Set a category to 0 to disable it entirely.
     Traps are controlled separately by the 'Trap Chance' option.
-    Categories: master_ball, pokeballs, medicine, key_items, splash."""
+    Categories: master_ball, key_items, splash."""
     display_name = "Filler Item Weights"
-    valid_keys = frozenset({"master_ball", "pokeballs", "medicine", "key_items", "splash"})
+    valid_keys = frozenset({"master_ball", "key_items", "splash"})
     default = {
         "master_ball": 50,
-        "pokeballs":   150,
-        "medicine":    150,
         "key_items":   100,
         "splash":      50,
     }

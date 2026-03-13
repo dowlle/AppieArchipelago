@@ -86,8 +86,6 @@ class PokepelagoItem(Item):
 # Traps are excluded here — they are controlled separately by the trap_chance option.
 FILLER_ITEM_CATEGORIES: dict = {
     "master_ball": ["Master Ball"],
-    "pokeballs":   ["Ultra Ball", "Great Ball", "Net Ball", "Dusk Ball", "Repeat Ball", "Quick Ball"],
-    "medicine":    ["Full Restore", "Max Potion", "Revive", "Max Revive", "Full Heal", "Rare Candy"],
-    "key_items":   ["Repel", "Super Repel", "Escape Rope", "Pokedex", "Pokegear"],
+    "key_items":   ["Pokedex", "Pokegear"],
     "splash":      ["Magikarp used Splash - but nothing happened!"],
 }
