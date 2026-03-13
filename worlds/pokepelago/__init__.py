@@ -420,8 +420,10 @@ class PokepelagoWorld(World):
         type_steps = TYPE_MILESTONE_STEPS
         if not self.options.dexsanity.value:
             type_steps = sorted(set(TYPE_MILESTONE_STEPS + DEXSANITY_OFF_EXTRA_STEPS))
+        self._created_type_milestones: dict[str, list[int]] = {}
         for p_type in GEN_1_TYPES:
             max_catchable = self._active_type_counts.get(p_type, 0)
+            steps_for_type: list[int] = []
             for step in type_steps:
                 if step <= max_catchable:
                     loc_name = f"Caught {step} {p_type} Pokemon"
@@ -429,6 +431,9 @@ class PokepelagoWorld(World):
                     if loc_id is not None:
                         location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
                         menu_region.locations.append(location)
+                        steps_for_type.append(step)
+            if steps_for_type:
+                self._created_type_milestones[p_type] = steps_for_type
 
         if self.options.dexsanity.value:
             # Per-Pokemon sub-regions connected from their game region.
@@ -542,4 +547,5 @@ class PokepelagoWorld(World):
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
             "random_region_count": int(o.random_region_count.value),
+            "type_milestones": self._created_type_milestones,
         }
