@@ -247,16 +247,45 @@ class _LegacyRegionToggle(Toggle):
     visibility = Visibility.none  # hidden from options UI
     default = 0
 
-class IncludeKanto(_LegacyRegionToggle): display_name = "Include Kanto (deprecated)"
-class IncludeJohto(_LegacyRegionToggle): display_name = "Include Johto (deprecated)"
-class IncludeHoenn(_LegacyRegionToggle): display_name = "Include Hoenn (deprecated)"
-class IncludeSinnoh(_LegacyRegionToggle): display_name = "Include Sinnoh (deprecated)"
-class IncludeUnova(_LegacyRegionToggle): display_name = "Include Unova (deprecated)"
-class IncludeKalos(_LegacyRegionToggle): display_name = "Include Kalos (deprecated)"
-class IncludeAlola(_LegacyRegionToggle): display_name = "Include Alola (deprecated)"
-class IncludeGalar(_LegacyRegionToggle): display_name = "Include Galar (deprecated)"
-class IncludeHisui(_LegacyRegionToggle): display_name = "Include Hisui (deprecated)"
-class IncludePaldea(_LegacyRegionToggle): display_name = "Include Paldea (deprecated)"
+class IncludeKanto(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Kanto (deprecated)"
+
+class IncludeJohto(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Johto (deprecated)"
+
+class IncludeHoenn(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Hoenn (deprecated)"
+
+class IncludeSinnoh(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Sinnoh (deprecated)"
+
+class IncludeUnova(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Unova (deprecated)"
+
+class IncludeKalos(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Kalos (deprecated)"
+
+class IncludeAlola(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Alola (deprecated)"
+
+class IncludeGalar(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Galar (deprecated)"
+
+class IncludeHisui(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Hisui (deprecated)"
+
+class IncludePaldea(_LegacyRegionToggle):
+    """Deprecated — use the 'regions' option instead."""
+    display_name = "Include Paldea (deprecated)"
 
 _LEGACY_REGION_MAP: dict[str, str] = {
     "include_kanto": "Kanto", "include_johto": "Johto", "include_hoenn": "Hoenn",

@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import Any
 
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
 from worlds.AutoWorld import World, WebWorld
@@ -39,6 +40,12 @@ class PokepelagoWorld(World):
     location_name_to_id = location_table
 
     def generate_early(self):
+        # ── Universal Tracker re-generation: restore derived state from slot data ──
+        passthrough = getattr(self.multiworld, "re_gen_passthrough", {}).get("Pokepelago")
+        if passthrough:
+            self._generate_early_from_passthrough(passthrough)
+            return
+
         # Backward compat: merge legacy include_kanto/johto/… toggles into regions set
         o = self.options
         legacy_regions = {region for opt_name, region in _LEGACY_REGION_MAP.items()
@@ -213,6 +220,9 @@ class PokepelagoWorld(World):
                     reqs.append((f"{stone.title()} Stone", 1))
                     break
         return frozenset(reqs)
+
+    def get_filler_item_name(self) -> str:
+        return "Magikarp used Splash - but nothing happened!"
 
     def create_item(self, name: str) -> PokepelagoItem:
         data = item_data_table.get(name)
@@ -548,4 +558,91 @@ class PokepelagoWorld(World):
             "starting_starter":  self.chosen_starter,
             "random_region_count": int(o.random_region_count.value),
             "type_milestones": self._created_type_milestones,
+        }
+
+    # ── Universal Tracker support ──
+    @staticmethod
+    def interpret_slot_data(slot_data: dict[str, Any]) -> dict[str, Any]:
+        """Return slot_data so the UT can re-generate with the same derived state."""
+        return slot_data
+
+    def _generate_early_from_passthrough(self, passthrough: dict[str, Any]) -> None:
+        """Restore derived state from UT passthrough data instead of re-randomizing."""
+        o = self.options
+
+        # Restore options from passthrough so the rest of generation is consistent
+        o.dexsanity.value = int(passthrough["dexsanity"])
+        o.type_locks.value = int(passthrough["type_locks"])
+        o.region_locks.value = int(passthrough["region_locks"])
+        o.starting_location_count.value = passthrough["starter_count"]
+        o.legendary_locks.value = int(passthrough["legendary_locks"])
+        o.trade_locks.value = int(passthrough["trade_locks"])
+        o.baby_locks.value = int(passthrough["baby_locks"])
+        o.daycare_count.value = passthrough["daycare_count"]
+        o.fossil_locks.value = int(passthrough["fossil_locks"])
+        o.ultra_beast_locks.value = int(passthrough["ultra_beast_locks"])
+        o.paradox_locks.value = int(passthrough["paradox_locks"])
+        o.stone_locks.value = int(passthrough["stone_locks"])
+        o.include_shinies.value = int(passthrough["include_shinies"])
+
+        # Restore derived region/starter state (originally chosen via randomness)
+        self.active_regions = list(passthrough["active_regions"].keys())
+        self.starting_region = passthrough["starting_region"]
+        self.goal_count = passthrough["goal_count"]
+        self.chosen_starter = passthrough.get("starting_starter")
+        self.starter_names = {self.chosen_starter} if self.chosen_starter else set()
+
+        # Rebuild active Pokémon set from restored regions
+        active_ids: set = set()
+        for r in self.active_regions:
+            lo, hi = REGION_RANGES[r]
+            active_ids.update(range(lo, hi + 1))
+
+        self.active_pokemon = [mon for mon in POKEMON_DATA if mon["id"] in active_ids]
+        self.active_pokemon_names = [mon["name"] for mon in self.active_pokemon]
+        self._mon_lookup = {mon["name"]: mon for mon in self.active_pokemon}
+
+        # Re-compute lock category sets
+        self._gl_sub   = active_ids & LEGENDARY_SUB_IDS
+        self._gl_box   = active_ids & LEGENDARY_BOX_IDS
+        self._gl_myth  = active_ids & LEGENDARY_MYTHIC_IDS
+        self._g_baby   = active_ids & BABY_IDS
+        self._g_trade  = active_ids & TRADE_EVO_IDS
+        self._g_fossil = active_ids & FOSSIL_IDS
+        self._g_ub     = active_ids & ULTRA_BEAST_IDS
+        self._g_para   = active_ids & PARADOX_IDS
+        self._g_stone  = {s: active_ids & ids for s, ids in STONE_EVO_GROUPS.items() if active_ids & ids}
+
+        # Re-compute milestone requirement groups (same logic as normal generate_early)
+        region_locks = bool(o.region_locks.value)
+        type_locks = bool(o.type_locks.value)
+
+        global_req_counter: Counter = Counter()
+        type_req_counters: dict[str, Counter] = {t: Counter() for t in GEN_1_TYPES}
+
+        for mon in self.active_pokemon:
+            region = get_pokemon_region(mon["id"])
+            region_req = None
+            if region_locks and region != self.starting_region:
+                region_req = f"{region} Pass"
+            type_reqs: frozenset = frozenset()
+            if type_locks:
+                type_reqs = frozenset(f"{t} Type Key" for t in mon["types"])
+
+            extra_reqs = self._extra_reqs(mon["id"])
+            key = (region_req, type_reqs, extra_reqs)
+            global_req_counter[key] += 1
+            for t in mon["types"]:
+                if t in type_req_counters:
+                    type_req_counters[t][key] += 1
+
+        self._milestone_req_groups = [
+            (rr, tr, er, c) for (rr, tr, er), c in global_req_counter.items()
+        ]
+        self._type_milestone_req_groups = {
+            t: [(rr, tr, er, c) for (rr, tr, er), c in counter.items()]
+            for t, counter in type_req_counters.items()
+        }
+        self._active_type_counts = {
+            t: sum(counter.values()) for t, counter in type_req_counters.items()
         }
