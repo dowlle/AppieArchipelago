@@ -554,6 +554,7 @@ class PokepelagoWorld(World):
             "paradox_locks":     bool(o.paradox_locks.value),
             "stone_locks":       bool(o.stone_locks.value),
             "include_shinies":   bool(o.include_shinies.value),
+            "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
             "random_region_count": int(o.random_region_count.value),

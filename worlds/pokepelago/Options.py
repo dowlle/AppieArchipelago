@@ -240,6 +240,13 @@ class StoneLocks(Toggle):
     default = 0
 
 
+class MasterBallBypassGates(Toggle):
+    """If enabled, Master Balls can catch any Pokemon regardless of lock gates.
+    If disabled, Master Balls can only be used on Pokemon you could normally guess."""
+    display_name = "Master Ball Bypasses Gates"
+    default = 1
+
+
 # ── Legacy backward-compat toggles (hidden from UI, consumed by generate_early) ─────
 # Old YAMLs used include_kanto/include_johto/… instead of the unified "regions" OptionSet.
 class _LegacyRegionToggle(Toggle):
@@ -322,6 +329,7 @@ class PokepelagoOptions(PerGameCommonOptions):
     ultra_beast_locks: UltraBeastLocks
     paradox_locks: ParadoxLocks
     stone_locks: StoneLocks
+    master_ball_bypass_gates: MasterBallBypassGates
     include_shinies: IncludeShinies
     goal_type: GoalType
     goal_percentage: GoalPercentage
@@ -346,5 +354,5 @@ pokepelago_option_groups: list[OptionGroup] = [
     OptionGroup("Regions", [Regions, RandomRegionCount, RegionLocks, StarterRegion, StarterPokemon]),
     OptionGroup("Lock Gates", [EnableTypeLocks, LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
-    OptionGroup("Items", [IncludeShinies, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
+    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
 ]

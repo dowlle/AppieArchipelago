@@ -1137,7 +1137,8 @@ TRADE_EVO_IDS: frozenset = frozenset([
     186, 199, 208, 212, 230, 233,                           # Gen 2: Politoed, Slowking, Steelix, Scizor, Kingdra, Porygon2
     367, 368,                                               # Gen 3: Huntail, Gorebyss
     464, 466, 467, 474, 477,                                # Gen 4: Rhyperior, Electivire, Magmortar, Porygon-Z, Dusknoir
-    526, 534, 589, 590,                                     # Gen 5: Gigalith, Conkeldurr, Escavalier, Accelgor
+    526, 534, 589, 617,                                     # Gen 5: Gigalith, Conkeldurr, Escavalier, Accelgor
+    709, 711,                                               # Gen 6: Trevenant, Gourgeist
 ])
 
 # Fossil Pokémon — require Fossil Restorer
