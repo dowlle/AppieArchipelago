@@ -319,7 +319,6 @@ class IncludeShinies(Toggle):
     its shiny sprite. Purely cosmetic — no gameplay effect."""
     display_name = "Include Shiny Charms"
     default = 1
-    default = 1
 
 
 @dataclass

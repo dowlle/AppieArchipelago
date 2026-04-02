@@ -1034,54 +1034,34 @@ GEN_1_TYPES = [
     "Fairy", "Steel", "Dark"
 ]
 
-# Ordered list of all supported game regions (index used for item IDs)
-GAME_REGIONS = [
-    "Kanto", "Johto", "Hoenn", "Sinnoh", "Unova",
-    "Kalos", "Alola", "Galar", "Hisui", "Paldea"
-]
+# ── Region data (single source of truth) ────────────────────────────────────
+# Each region defines its Pokedex ID range, starters, and generation number.
+# All other region-related structures are derived from this dict.
+REGION_DATA: dict[str, dict] = {
+    "Kanto":  {"range": (1, 151),     "starters": ["Bulbasaur", "Charmander", "Squirtle"], "gen": 1},
+    "Johto":  {"range": (152, 251),   "starters": ["Chikorita", "Cyndaquil", "Totodile"],  "gen": 2},
+    "Hoenn":  {"range": (252, 386),   "starters": ["Treecko", "Torchic", "Mudkip"],        "gen": 3},
+    "Sinnoh": {"range": (387, 493),   "starters": ["Turtwig", "Chimchar", "Piplup"],       "gen": 4},
+    "Unova":  {"range": (494, 649),   "starters": ["Snivy", "Tepig", "Oshawott"],          "gen": 5},
+    "Kalos":  {"range": (650, 721),   "starters": ["Chespin", "Fennekin", "Froakie"],       "gen": 6},
+    "Alola":  {"range": (722, 809),   "starters": ["Rowlet", "Litten", "Popplio"],          "gen": 7},
+    "Galar":  {"range": (810, 898),   "starters": ["Grookey", "Scorbunny", "Sobble"],       "gen": 8},
+    "Hisui":  {"range": (899, 905),   "starters": [],                                       "gen": 8},
+    "Paldea": {"range": (906, 1025),  "starters": ["Sprigatito", "Fuecoco", "Quaxly"],      "gen": 9},
+}
+
+# Derived structures — kept as module-level constants for backward compatibility and performance
+GAME_REGIONS: list[str] = list(REGION_DATA.keys())
+REGION_RANGES: dict[str, tuple[int, int]] = {r: d["range"] for r, d in REGION_DATA.items()}
+STARTERS_BY_REGION: dict[str, list[str]] = {r: d["starters"] for r, d in REGION_DATA.items()}
 
 # Generation-based grouping (Gen 8 = Galar + Hisui as a single unit).
 # Used by random_region_count when group_hisui_galar is enabled.
+_gen_numbers = sorted(set(d["gen"] for d in REGION_DATA.values()))
 GAME_GENERATIONS: list[list[str]] = [
-    ["Kanto"],             # Gen 1
-    ["Johto"],             # Gen 2
-    ["Hoenn"],             # Gen 3
-    ["Sinnoh"],            # Gen 4
-    ["Unova"],             # Gen 5
-    ["Kalos"],             # Gen 6
-    ["Alola"],             # Gen 7
-    ["Galar", "Hisui"],    # Gen 8
-    ["Paldea"],            # Gen 9
+    [r for r, d in REGION_DATA.items() if d["gen"] == gen]
+    for gen in _gen_numbers
 ]
-
-# Inclusive Pokedex ID ranges for each region
-REGION_RANGES = {
-    "Kanto": (1, 151),
-    "Johto": (152, 251),
-    "Hoenn": (252, 386),
-    "Sinnoh": (387, 493),
-    "Unova": (494, 649),
-    "Kalos": (650, 721),
-    "Alola": (722, 809),
-    "Galar": (810, 898),
-    "Hisui": (899, 905),
-    "Paldea": (906, 1025),
-}
-
-# Canonical starters for each region (by name, must match POKEMON_DATA entries)
-# Hisui has no traditional starters (PLA starters come from other region IDs)
-STARTERS_BY_REGION = {
-    "Kanto": ["Bulbasaur", "Charmander", "Squirtle"],
-    "Johto": ["Chikorita", "Cyndaquil", "Totodile"],
-    "Hoenn": ["Treecko", "Torchic", "Mudkip"],
-    "Sinnoh": ["Turtwig", "Chimchar", "Piplup"],
-    "Unova": ["Snivy", "Tepig", "Oshawott"],
-    "Kalos": ["Chespin", "Fennekin", "Froakie"],
-    "Alola": ["Rowlet", "Litten", "Popplio"],
-    "Galar": ["Grookey", "Scorbunny", "Sobble"],
-    "Hisui": [],
-    "Paldea": ["Sprigatito", "Fuecoco", "Quaxly"],
-}
 
 def get_pokemon_region(mon_id: int) -> str:
     for region_name, (low, high) in REGION_RANGES.items():
