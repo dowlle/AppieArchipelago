@@ -218,3 +218,7 @@ hooks/
 run_fuzz.sh
 /fuzz_output/
 /fuzz_results/
+worlds/pokepelago/tools/.api_cache/
+worlds/pokepelago/tools/.serebii_cache/
+worlds/pokepelago/tools/validation_report.txt
+worlds/pokepelago/tools/serebii_encounters.json
