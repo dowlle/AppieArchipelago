@@ -136,17 +136,40 @@ def fetch_all_evolutions() -> list[dict]:
 # ── Data processing ──────────────────────────────────────────────────────────
 
 def collapse_location_name(area_name: str) -> str:
-    """Collapse sub-area names into parent location names."""
-    suffixes = [
-        "-area", "-1f", "-2f", "-3f", "-4f", "-5f",
-        "-b1f", "-b2f", "-b3f", "-b4f", "-b5f",
-        "-entrance", "-inside", "-outside",
-    ]
+    """Collapse sub-area names into parent location names.
+
+    Aggressively merges sub-areas into their parent to reduce route count.
+    All Pokemon from sub-areas get unioned into the parent route.
+    """
+    import re
     result = area_name
-    for suffix in suffixes:
-        if result.endswith(suffix):
-            result = result[: -len(suffix)]
-            break
+
+    # Floor suffixes: mt-moon-1f, mt-moon-b1f → mt-moon
+    result = re.sub(r'-\d+f$', '', result)
+    result = re.sub(r'-b\d+f$', '', result)
+
+    # Directional suffixes: route-1-south, route-16-east → route-1, route-16
+    result = re.sub(r'-(south|north|east|west|main|upper|lower|inner|outer)$', '', result)
+    result = re.sub(r'-(entrance|inside|outside|interior|back|front|top|bottom)$', '', result)
+
+    # Sub-area rooms: lost-cave-room-3 → lost-cave, viridian-forest-zone-1 → viridian-forest
+    result = re.sub(r'-room-\d+$', '', result)
+    result = re.sub(r'-unknown-area-\d+$', '', result)
+
+    # Named sub-areas in cities: cianwood-city-kirks-house → cianwood-city
+    result = re.sub(r'-(pokemon-center|kirks-house|manias-house|bills-house|'
+                    r'fighting-dojo|silph-co-\w+|celadon-mansion|ss-anne-dock|'
+                    r'cave-gate|square|lab|mart)$', '', result)
+
+    # Safari/park zones: johto-safari-zone-zone-wetland → johto-safari-zone
+    result = re.sub(r'-zone-[\w-]+$', '', result)
+
+    # Numbered areas: great-marsh-area-1 → great-marsh, kanto-safari-zone-area-1-east → kanto-safari-zone
+    result = re.sub(r'-area-\d+(-\w+)?$', '', result)
+
+    # Hauoli/trainer school etc: alola-route-1-hauoli-outskirts, alola-route-1-trainers-school
+    result = re.sub(r'-(hauoli-outskirts|trainers-school)$', '', result)
+
     return result
 
 
@@ -186,6 +209,50 @@ def process_encounters(raw_encounters: list[dict]) -> tuple[
 
         if route_key not in pokemon_routes[pokemon_id]:
             pokemon_routes[pokemon_id].append(route_key)
+
+    # ── Route merging: keep only numbered routes, merge everything else ──
+    # Named routes (Route 1, Route 101, etc.) are the main progression routes.
+    # Caves, cities, forests, etc. merge into "{Region} Wilds".
+    # Exceptions: Hisui (5 main areas), Galar (pokearth areas), Paldea (biomes),
+    # and virtual routes are kept as-is since they use different naming.
+    import re
+    KEEP_PATTERNS = [
+        re.compile(r'^(kanto|johto|hoenn|sinnoh|unova|kalos|alola)-route-\d+'),  # Numbered routes
+        re.compile(r'^(kanto|johto|hoenn|sinnoh|unova|kalos|alola)-sea-route-\d+'),  # Sea routes
+        re.compile(r'^(hoenn|kanto)-victory-road'),  # Victory roads (large areas)
+        re.compile(r'^(hoenn|johto|kanto)-safari'),   # Safari zones (large areas)
+        re.compile(r'^galar-'),     # Galar uses Serebii area names (already good)
+        re.compile(r'^hisui-'),     # Hisui has 5 main areas
+        re.compile(r'^paldea-'),    # Paldea uses biome names
+        re.compile(r'^virtual-'),   # Virtual routes (starters, fossils, etc.)
+        re.compile(r'^roaming-'),   # Roaming Pokemon
+    ]
+
+    def should_keep(route_key: str) -> bool:
+        return any(p.match(route_key) for p in KEEP_PATTERNS)
+
+    # Merge non-route locations into "{Region} Wilds"
+    to_merge = [rk for rk in routes if not should_keep(rk)]
+    for rk in to_merge:
+        info = routes.pop(rk)
+        catchall_key = f"{info['region'].lower()}-wilds"
+        if catchall_key not in routes:
+            routes[catchall_key] = {
+                "display_name": f"{info['region']} Wilds",
+                "region": info["region"],
+                "pokemon": {},
+            }
+        for pid, lvl in info["pokemon"].items():
+            current = routes[catchall_key]["pokemon"].get(pid)
+            if current is None or lvl < current:
+                routes[catchall_key]["pokemon"][pid] = lvl
+
+    # Rebuild pokemon_routes after merging
+    pokemon_routes = defaultdict(list)
+    for route_key, info in routes.items():
+        for pid in info["pokemon"]:
+            if route_key not in pokemon_routes[pid]:
+                pokemon_routes[pid].append(route_key)
 
     return routes, dict(pokemon_routes)
 

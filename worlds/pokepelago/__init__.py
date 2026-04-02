@@ -2,7 +2,7 @@ from collections import Counter
 from typing import Any
 
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
-from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny, CanReachLocation
+from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
 from worlds.AutoWorld import World, WebWorld
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
                     ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES)
@@ -167,17 +167,29 @@ class PokepelagoWorld(World):
             for name in STARTERS_BY_REGION.get(region, []):
                 lab_pokemon_names.add(name.lower())
 
+        # Pokemon that should never be random starters (gated behind extra items)
+        excluded_ids = (
+            LEGENDARY_SUB_IDS | LEGENDARY_BOX_IDS | LEGENDARY_MYTHIC_IDS |
+            BABY_IDS | TRADE_EVO_IDS | FOSSIL_IDS | ULTRA_BEAST_IDS | PARADOX_IDS
+        )
+        for ids in STONE_EVO_GROUPS.values():
+            excluded_ids = excluded_ids | ids
+
         if lab_only:
-            # Only regional starters from active regions
+            # Only regional starters from active regions (exclude gated ones)
             for mon in POKEMON_DATA:
                 if mon["id"] not in active_ids:
+                    continue
+                if mon["id"] in excluded_ids:
                     continue
                 if mon["name"].lower() in lab_pokemon_names:
                     candidates.append(mon)
         else:
-            # All active base-form Pokemon with routes
+            # All active base-form Pokemon with routes (exclude gated ones)
             for mon in POKEMON_DATA:
                 if mon["id"] not in active_ids:
+                    continue
+                if mon["id"] in excluded_ids:
                     continue
                 base = FAMILY_BASE.get(mon["id"], mon["id"])
                 if base != mon["id"]:
@@ -442,14 +454,22 @@ class PokepelagoWorld(World):
         for p_type in sorted(starter_types):
             self.multiworld.push_precollected(self.create_item(f"{p_type} Type Key"))
 
-        # Pre-collect starter's Route Key and Line Unlock so it's guessable from the start
+        # Pre-collect starter's Route Key, Line Unlock, and Region Pass
         starter_precollected_routes: set[str] = set()
         starter_precollected_lines: set[int] = set()
+        starter_precollected_regions: set[str] = set()
         for name in self.starter_names:
             mon = self._mon_lookup.get(name)
             if not mon:
                 continue
             mid = mon["id"]
+            # Region pass: pre-collect if starter is in a non-starting region
+            if self.options.region_locks.value:
+                mon_region = get_pokemon_region(mid)
+                if mon_region != self.starting_region and mon_region in self.active_regions:
+                    if mon_region not in starter_precollected_regions:
+                        self.multiworld.push_precollected(self.create_item(f"{mon_region} Pass"))
+                        starter_precollected_regions.add(mon_region)
             # Route key: pre-collect one route key for any route the starter appears on
             if self.options.route_locks_enabled.value:
                 route_items = self._pokemon_route_items.get(mid, [])
@@ -471,10 +491,10 @@ class PokepelagoWorld(World):
                     self.multiworld.itempool.append(self.create_item(f"{p_type} Type Key"))
                     my_items_in_pool += 1
 
-        # Region Passes for non-starting regions
+        # Region Passes for non-starting regions (minus pre-collected starter regions)
         if self.options.region_locks.value:
             for region in self.active_regions:
-                if region != self.starting_region:
+                if region != self.starting_region and region not in starter_precollected_regions:
                     self.multiworld.itempool.append(self.create_item(f"{region} Pass"))
                     my_items_in_pool += 1
 
@@ -627,17 +647,10 @@ class PokepelagoWorld(World):
             if steps_for_type:
                 self._created_type_milestones[p_type] = steps_for_type
 
-        # Route completion milestones (when route_locks is ON)
-        created_route_milestones: set[str] = set()
-        if self.options.route_locks_enabled.value:
-            for route_key in self._active_routes:
-                loc_name = ROUTE_MILESTONE_NAMES.get(route_key)
-                if loc_name and loc_name not in created_route_milestones:
-                    loc_id = self.location_name_to_id.get(loc_name)
-                    if loc_id is not None:
-                        location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
-                        menu_region.locations.append(location)
-                        created_route_milestones.add(loc_name)
+        # Route completion milestones: only create if needed to absorb excess items
+        # With dexsanity ON + regular milestones, there are usually enough locations.
+        # Only add route milestones if progression items would exceed available locations.
+        # (Computed later in create_items if needed — placeholder for now)
 
         if self.options.dexsanity.value:
             # Per-Pokemon sub-regions connected from their game region
@@ -694,24 +707,6 @@ class PokepelagoWorld(World):
                         rule = rule & p
                     loc = self.multiworld.get_location(f"Guess {mon['name']}", player)
                     self.set_rule(loc, rule)
-
-        # Route completion milestone rules: require the route key + ALL Pokemon on route guessable
-        if self.options.route_locks_enabled.value:
-            active_id_set = {m["id"] for m in self.active_pokemon}
-            name_by_id = {m["id"]: m["name"] for m in self.active_pokemon}
-            for route_key, item_name in self._active_routes.items():
-                loc_name = ROUTE_MILESTONE_NAMES.get(route_key)
-                if not loc_name:
-                    continue
-                loc = self.multiworld.get_location(loc_name, player)
-                # Build rule: Has(route_key) AND CanReachLocation("Guess X") for each Pokemon on route
-                route_pokemon = [pid for pid in ROUTE_DATA[route_key]["pokemon"] if pid in active_id_set]
-                rule = Has(item_name)
-                for pid in route_pokemon:
-                    mon_name = name_by_id.get(pid)
-                    if mon_name:
-                        rule = rule & CanReachLocation(f"Guess {mon_name}")
-                self.set_rule(loc, rule)
 
         # Global milestone access rules
         for loc in self.multiworld.get_locations(player):
