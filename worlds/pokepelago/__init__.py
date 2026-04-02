@@ -2,16 +2,19 @@ from collections import Counter
 from typing import Any
 
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
+from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
 from worlds.AutoWorld import World, WebWorld
-from worlds.generic.Rules import set_rule
-from .Items import PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES
+from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
+                    ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES)
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
-                        TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS)
+                        TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES)
 from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
 from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, STARTERS_BY_REGION, get_pokemon_region,
                    LEGENDARY_SUB_IDS, LEGENDARY_BOX_IDS, LEGENDARY_MYTHIC_IDS,
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
                    STONE_EVO_GROUPS)
+from .route_data import ROUTE_DATA, POKEMON_ROUTES, FAMILY_BASE, BADGE_LEVEL_THRESHOLDS
+from .rules import CanAccessNPokemon
 
 # Derive from GAME_REGIONS so it stays in sync automatically
 _REGION_BY_INDEX: dict[int, str] = {i + 1: r for i, r in enumerate(GAME_REGIONS)}
@@ -58,6 +61,10 @@ class PokepelagoWorld(World):
                           if getattr(o, opt_name).value}
         if legacy_regions:
             o.regions.value = o.regions.value | legacy_regions
+
+        # Line locks require dexsanity (not enough locations without per-Pokemon checks)
+        if o.line_locks.value and not o.dexsanity.value:
+            o.dexsanity.value = 1
 
         self._select_active_regions()
         self._select_starter()
@@ -170,6 +177,43 @@ class PokepelagoWorld(World):
             stone: active_ids & ids for stone, ids in STONE_EVO_GROUPS.items() if active_ids & ids
         }
 
+        # Route locks: active routes are those whose region matches an active region
+        # and that contain at least one active Pokemon
+        self._active_routes: dict[str, str] = {}  # route_key → item_name
+        if self.options.route_locks_enabled.value:
+            active_region_set = set(self.active_regions)
+            for route_key, route_info in ROUTE_DATA.items():
+                if route_info["region"] not in active_region_set:
+                    continue
+                # Route must contain at least one active Pokemon
+                if any(pid in active_ids for pid in route_info["pokemon"]):
+                    item_name = ROUTE_KEY_NAMES.get(route_key)
+                    if item_name:
+                        self._active_routes[route_key] = item_name
+
+        # Line locks: active families are those with at least one member in active pool
+        self._active_lines: dict[int, str] = {}  # base_id → item_name
+        if self.options.line_locks.value:
+            for pid in active_ids:
+                base_id = FAMILY_BASE.get(pid, pid)
+                if base_id not in self._active_lines:
+                    item_name = LINE_UNLOCK_NAMES.get(base_id)
+                    if item_name:
+                        self._active_lines[base_id] = item_name
+
+        # Pokemon → route key item names lookup (for rule building)
+        self._pokemon_route_items: dict[int, list[str]] = {}
+        if self.options.route_locks_enabled.value:
+            for pid in active_ids:
+                routes = POKEMON_ROUTES.get(pid, [])
+                # For evo-only Pokemon, inherit base form's routes
+                base_id = FAMILY_BASE.get(pid, pid)
+                if not routes and base_id != pid:
+                    routes = POKEMON_ROUTES.get(base_id, [])
+                items = [self._active_routes[rk] for rk in routes if rk in self._active_routes]
+                if items:
+                    self._pokemon_route_items[pid] = items
+
         self._compute_milestone_requirements()
 
     def _compute_milestone_requirements(self) -> None:
@@ -209,20 +253,49 @@ class PokepelagoWorld(World):
         }
 
     def _extra_reqs(self, mon_id: int) -> frozenset:
-        """Return extra gate requirements for a Pokemon beyond region/type locks.
+        """Return extra gate requirements for a Pokemon beyond region/type/route/line locks.
 
         Returns a frozenset of (item_name, required_count) tuples. An empty frozenset
-        means no extra gate applies.
+        means no extra gate applies. Route locks (HasAny) and Line locks (Has) are
+        handled separately in set_rules() since they use different rule types.
         """
         o = self.options
         reqs: list = []
+
+        # Badge gating: max(level-based badges, legendary tier badges)
+        badge_req = 0
+        if o.badge_level_gating.value:
+            # Find the Pokemon's minimum encounter level across all its routes
+            routes = POKEMON_ROUTES.get(mon_id, [])
+            base_id = FAMILY_BASE.get(mon_id, mon_id)
+            if not routes and base_id != mon_id:
+                routes = POKEMON_ROUTES.get(base_id, [])
+            min_level = 100
+            for rk in routes:
+                route_info = ROUTE_DATA.get(rk)
+                if route_info:
+                    lvl = route_info["pokemon"].get(mon_id) or route_info["pokemon"].get(base_id)
+                    if lvl and lvl < min_level:
+                        min_level = lvl
+            # Map level to badge count using thresholds
+            for i, threshold in enumerate(BADGE_LEVEL_THRESHOLDS):
+                if min_level <= threshold:
+                    badge_req = i
+                    break
+            else:
+                badge_req = len(BADGE_LEVEL_THRESHOLDS)
+
         if o.legendary_locks.value:
             if mon_id in self._active_legendary_mythics:
-                reqs.append(("Gym Badge", 8))
+                badge_req = max(badge_req, 8)
             elif mon_id in self._active_legendary_boxes:
-                reqs.append(("Gym Badge", 7))
+                badge_req = max(badge_req, 7)
             elif mon_id in self._active_legendary_subs:
-                reqs.append(("Gym Badge", 6))
+                badge_req = max(badge_req, 6)
+
+        if badge_req > 0:
+            reqs.append(("Gym Badge", badge_req))
+
         if o.trade_locks.value and mon_id in self._active_trades:
             reqs.append(("Link Cable", 1))
         if o.baby_locks.value and mon_id in self._active_babies:
@@ -291,9 +364,27 @@ class PokepelagoWorld(World):
                     self.multiworld.itempool.append(self.create_item(f"{region} Pass"))
                     my_items_in_pool += 1
 
-        # Lock gate items
         o = self.options
-        if o.legendary_locks.value and (self._active_legendary_subs or self._active_legendary_boxes or self._active_legendary_mythics):
+
+        # Route Key items (one per active route)
+        if o.route_locks_enabled.value:
+            for route_key, item_name in sorted(self._active_routes.items()):
+                self.multiworld.itempool.append(self.create_item(item_name))
+                my_items_in_pool += 1
+
+        # Line Unlock items (one per active evolution family)
+        # Line locks force dexsanity ON in generate_early(), so locations are sufficient
+        if o.line_locks.value:
+            for base_id, item_name in sorted(self._active_lines.items()):
+                self.multiworld.itempool.append(self.create_item(item_name))
+                my_items_in_pool += 1
+
+        # Gym Badges: added if legendary_locks OR badge_level_gating is on
+        has_badge_need = (
+            (o.legendary_locks.value and (self._active_legendary_subs or self._active_legendary_boxes or self._active_legendary_mythics))
+            or o.badge_level_gating.value
+        )
+        if has_badge_need:
             for _ in range(8):
                 self.multiworld.itempool.append(self.create_item("Gym Badge"))
                 my_items_in_pool += 1
@@ -362,28 +453,6 @@ class PokepelagoWorld(World):
             self.multiworld.itempool.append(self.create_item(filler_name))
             my_items_in_pool += 1
 
-    # ── Rule helpers ────────────────────────────────────────────────────────────
-
-    def _make_milestone_rule(self, target_count: int, req_groups: list):
-        """Build an access rule checking whether >= target_count Pokemon are logically accessible."""
-        player = self.player
-
-        def rule(state):
-            accessible = 0
-            for region_req, type_reqs, extra_reqs, count in req_groups:
-                if region_req and not state.has(region_req, player):
-                    continue
-                if type_reqs and not state.has_all(type_reqs, player):
-                    continue
-                if extra_reqs and not all(state.count(item, player) >= n for item, n in extra_reqs):
-                    continue
-                accessible += count
-                if accessible >= target_count:
-                    return True
-            return False
-
-        return rule
-
     # ── Region & rule creation ──────────────────────────────────────────────────
 
     def create_regions(self) -> None:
@@ -392,28 +461,22 @@ class PokepelagoWorld(World):
 
         # One AP Region per active game region
         game_regions: dict = {}
+        gate_regions = (self.options.region_locks.value and self.options.dexsanity.value)
         for region_name in self.active_regions:
             ap_region = Region(f"{region_name} Region", self.player, self.multiworld)
             self.multiworld.regions.append(ap_region)
             game_regions[region_name] = ap_region
 
-            ent = Entrance(self.player, f"Menu To {region_name}", menu_region)
-            menu_region.exits.append(ent)
-            ent.connect(ap_region)
-
-            # Non-starting regions gated by Region Pass (dexsanity=ON only)
-            if (self.options.region_locks.value and self.options.dexsanity.value
-                    and region_name != self.starting_region):
-                pass_name = f"{region_name} Pass"
-                ent.access_rule = lambda state, p=pass_name: state.has(p, self.player)
+            rule = Has(f"{region_name} Pass") if (gate_regions and region_name != self.starting_region) else None
+            self.create_entrance(menu_region, ap_region, rule=rule, name=f"Menu To {region_name}")
 
         # Starting locations and global milestone locations → Menu region
         start_loc_count = self.options.starting_location_count.value
         active_starting_locs = set(starting_locations[:start_loc_count])
 
         for loc_name, loc_id in self.location_name_to_id.items():
-            if loc_name.startswith("Guess ") or loc_name.startswith("Caught "):
-                continue  # Per-Pokemon handled below; type milestones handled below
+            if loc_name.startswith("Guess ") or loc_name.startswith("Caught ") or loc_name.startswith("Cleared "):
+                continue  # Per-Pokemon, type milestones, route milestones handled below
 
             if loc_name in starting_locations and loc_name not in active_starting_locs:
                 continue  # Excluded by starting_location_count option
@@ -448,6 +511,18 @@ class PokepelagoWorld(World):
             if steps_for_type:
                 self._created_type_milestones[p_type] = steps_for_type
 
+        # Route completion milestones (when route_locks is ON)
+        created_route_milestones: set[str] = set()
+        if self.options.route_locks_enabled.value:
+            for route_key in self._active_routes:
+                loc_name = ROUTE_MILESTONE_NAMES.get(route_key)
+                if loc_name and loc_name not in created_route_milestones:
+                    loc_id = self.location_name_to_id.get(loc_name)
+                    if loc_id is not None:
+                        location = PokepelagoLocation(self.player, loc_name, loc_id, menu_region)
+                        menu_region.locations.append(location)
+                        created_route_milestones.add(loc_name)
+
         if self.options.dexsanity.value:
             # Per-Pokemon sub-regions connected from their game region
             for mon in self.active_pokemon:
@@ -474,33 +549,56 @@ class PokepelagoWorld(World):
     def set_rules(self) -> None:
         player = self.player
 
-        # Type key access rules on "Guess X" locations
-        if self.options.dexsanity.value and self.options.type_locks.value:
-            for mon in self.active_pokemon:
-                mon_name = mon["name"]
-                type_keys = [f"{t} Type Key" for t in mon["types"]]
-                location = self.multiworld.get_location(f"Guess {mon_name}", player)
-                set_rule(location, lambda state, tk=type_keys: state.has_all(tk, self.player))
-
-        # Extra gate access rules (legendary, trade, baby, fossil, UB, paradox, stone)
+        # Per-Pokemon access rules (type keys + extra gates + route + line in a single pass)
         if self.options.dexsanity.value:
+            type_locks = bool(self.options.type_locks.value)
+            route_locks = bool(self.options.route_locks_enabled.value)
+            line_locks = bool(self.options.line_locks.value)
+
             for mon in self.active_pokemon:
+                parts = []
+                if type_locks:
+                    type_keys = [f"{t} Type Key" for t in mon["types"]]
+                    parts.append(HasAll(*type_keys))
                 extra = self._extra_reqs(mon["id"])
-                if not extra:
+                if extra:
+                    parts.append(HasAllCounts({item: n for item, n in extra}))
+                if route_locks:
+                    route_items = self._pokemon_route_items.get(mon["id"])
+                    if route_items:
+                        parts.append(HasAny(*route_items))
+                if line_locks:
+                    base_id = FAMILY_BASE.get(mon["id"], mon["id"])
+                    line_item = self._active_lines.get(base_id)
+                    if line_item:
+                        parts.append(Has(line_item))
+                if parts:
+                    rule = parts[0]
+                    for p in parts[1:]:
+                        rule = rule & p
+                    loc = self.multiworld.get_location(f"Guess {mon['name']}", player)
+                    self.set_rule(loc, rule)
+
+        # Route completion milestone rules: require the route key + enough Pokemon accessible
+        if self.options.route_locks_enabled.value:
+            for route_key, item_name in self._active_routes.items():
+                loc_name = ROUTE_MILESTONE_NAMES.get(route_key)
+                if not loc_name:
                     continue
-                loc = self.multiworld.get_location(f"Guess {mon['name']}", player)
-                prev_rule = loc.access_rule
-                def _make_combined_rule(prev=prev_rule, er=extra, pl=player):
-                    def rule(state):
-                        return prev(state) and all(state.count(item, pl) >= n for item, n in er)
-                    return rule
-                set_rule(loc, _make_combined_rule())
+                loc = self.multiworld.get_location(loc_name, player)
+                route_pokemon_count = len([
+                    pid for pid in ROUTE_DATA[route_key]["pokemon"]
+                    if pid in {m["id"] for m in self.active_pokemon}
+                ])
+                # Require the route key AND enough total Pokemon accessible to have cleared this route
+                rule = Has(item_name) & CanAccessNPokemon(route_pokemon_count)
+                self.set_rule(loc, rule)
 
         # Global milestone access rules
         for loc in self.multiworld.get_locations(player):
             if loc.address is not None and loc.name.startswith("Guessed "):
                 count = int(loc.name.split(" ")[1])
-                set_rule(loc, self._make_milestone_rule(count, self._milestone_req_groups))
+                self.set_rule(loc, CanAccessNPokemon(count))
 
         # Type-specific milestone access rules
         for loc in self.multiworld.get_locations(player):
@@ -508,20 +606,14 @@ class PokepelagoWorld(World):
                 parts = loc.name.split(" ")
                 count = int(parts[1])
                 p_type = parts[2]
-                groups = self._type_milestone_req_groups.get(p_type, [])
-                if groups:
-                    set_rule(loc, self._make_milestone_rule(count, groups))
+                if self._type_milestone_req_groups.get(p_type):
+                    self.set_rule(loc, CanAccessNPokemon(count, group_key=p_type))
 
         # Victory rule
         victory_location = self.multiworld.get_location("Pokepelago Victory", player)
-        set_rule(victory_location,
-                 self._make_milestone_rule(self.goal_count, self._milestone_req_groups))
-
-        victory_item = self.create_event_item("Victory")
-        victory_location.place_locked_item(victory_item)
-
-        self.multiworld.completion_condition[self.player] = \
-            lambda state: state.has("Victory", self.player)
+        self.set_rule(victory_location, CanAccessNPokemon(self.goal_count))
+        victory_location.place_locked_item(self.create_event_item("Victory"))
+        self.set_completion_rule(Has("Victory"))
 
     # ── Slot data ───────────────────────────────────────────────────────────────
 
@@ -530,6 +622,9 @@ class PokepelagoWorld(World):
         return {
             "type_locks": bool(o.type_locks.value),
             "region_locks": bool(o.region_locks.value),
+            "route_locks": bool(o.route_locks_enabled.value),
+            "line_locks": bool(o.line_locks.value),
+            "badge_level_gating": bool(o.badge_level_gating.value),
             "active_regions": {r: list(REGION_RANGES[r]) for r in self.active_regions},
             "starting_region": self.starting_region,
             "goal_count": self.goal_count,
@@ -568,6 +663,9 @@ class PokepelagoWorld(World):
         o.dexsanity.value = int(passthrough["dexsanity"])
         o.type_locks.value = int(passthrough["type_locks"])
         o.region_locks.value = int(passthrough["region_locks"])
+        o.route_locks_enabled.value = int(passthrough.get("route_locks", 0))
+        o.line_locks.value = int(passthrough.get("line_locks", 0))
+        o.badge_level_gating.value = int(passthrough.get("badge_level_gating", 0))
         o.starting_location_count.value = passthrough["starter_count"]
         o.legendary_locks.value = int(passthrough["legendary_locks"])
         o.trade_locks.value = int(passthrough["trade_locks"])

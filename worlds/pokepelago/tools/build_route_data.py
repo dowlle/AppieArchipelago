@@ -430,8 +430,176 @@ def _compare(lines: list[str], name: str, current: frozenset | set, api: set) ->
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def merge_serebii_data(
+    routes: dict[str, dict],
+    pokemon_routes: dict[int, list[str]],
+) -> tuple[int, int]:
+    """Merge Serebii encounter data into the PokeAPI routes.
+
+    For routes in both sources: union Pokemon lists, keep lowest levels.
+    For Serebii-only routes: add as new routes.
+    Returns (routes_added, pokemon_added) counts.
+    """
+    serebii_file = Path(__file__).parent / "serebii_encounters.json"
+    if not serebii_file.exists():
+        print("  No serebii_encounters.json found — skipping merge")
+        return 0, 0
+
+    serebii_data = json.loads(serebii_file.read_text(encoding="utf-8"))
+    routes_added = 0
+    pokemon_before = len(pokemon_routes)
+
+    for route_key, route_info in serebii_data.items():
+        pokemon_map = {int(pid): lvl for pid, lvl in route_info["pokemon"].items()}
+
+        if route_key in routes:
+            # Existing route: merge Pokemon, keep lowest level
+            for pid, level in pokemon_map.items():
+                current = routes[route_key]["pokemon"].get(pid)
+                if current is None or level < current:
+                    routes[route_key]["pokemon"][pid] = level
+        else:
+            # New route from Serebii
+            routes[route_key] = {
+                "display_name": route_info["display_name"],
+                "region": route_info["region"],
+                "pokemon": pokemon_map,
+            }
+            routes_added += 1
+
+        # Update reverse lookup
+        for pid in pokemon_map:
+            if pid <= MAX_POKEMON_ID:
+                if pid not in pokemon_routes:
+                    pokemon_routes[pid] = []
+                if route_key not in pokemon_routes[pid]:
+                    pokemon_routes[pid].append(route_key)
+
+    pokemon_added = len(pokemon_routes) - pokemon_before
+    return routes_added, pokemon_added
+
+
+def add_virtual_routes(
+    routes: dict[str, dict],
+    pokemon_routes: dict[int, list[str]],
+    families: dict[int, frozenset[int]],
+    family_base: dict[int, int],
+    mythical_ids: set[int],
+) -> int:
+    """Add virtual routes for Pokemon unobtainable through wild encounters.
+
+    Categories:
+    - Professor's Lab (per region): starters and their evolutions
+    - Fossil Lab: fossil revival evolutions without wild encounters
+    - Mystery Gift: mythical/event-only Pokemon
+    - Location-based: legendaries and special Pokemon at their in-game locations
+    """
+    from worlds.pokepelago.data import POKEMON_DATA, STARTERS_BY_REGION, FOSSIL_IDS
+
+    added = 0
+
+    def _add_route(key: str, display: str, region: str, pokemon_ids: set[int], level: int = 5) -> None:
+        nonlocal added
+        pokemon_ids = {pid for pid in pokemon_ids if pid <= MAX_POKEMON_ID}
+        if not pokemon_ids:
+            return
+        routes[key] = {
+            "display_name": display,
+            "region": region,
+            "pokemon": {pid: level for pid in pokemon_ids},
+        }
+        for pid in pokemon_ids:
+            if pid not in pokemon_routes:
+                pokemon_routes[pid] = []
+            if key not in pokemon_routes[pid]:
+                pokemon_routes[pid].append(key)
+        added += 1
+
+    # ── Starters: Professor's Lab per region ──
+    all_starter_family_ids: dict[str, set[int]] = {}
+    for region, names in STARTERS_BY_REGION.items():
+        if not names:
+            continue
+        region_starter_ids: set[int] = set()
+        name_lower = {n.lower() for n in names}
+        for mon in POKEMON_DATA:
+            if mon["name"].lower() in name_lower:
+                base = family_base.get(mon["id"], mon["id"])
+                family = families.get(base, frozenset([mon["id"]]))
+                region_starter_ids.update(family)
+        # Only include family members that don't already have routes
+        orphaned = {pid for pid in region_starter_ids if pid not in pokemon_routes}
+        if orphaned:
+            _add_route(f"virtual-professors-lab-{region.lower()}", f"Professor's Lab ({region})", region, orphaned)
+            all_starter_family_ids[region] = orphaned
+
+    # ── Fossils: Fossil Lab ──
+    # Only fossil evolutions that are still orphaned (base fossils may have routes)
+    fossil_orphans = {pid for pid in FOSSIL_IDS if pid not in pokemon_routes and pid <= MAX_POKEMON_ID}
+    if fossil_orphans:
+        _add_route("virtual-fossil-lab", "Fossil Lab", "Kanto", fossil_orphans, level=20)
+
+    # ── Mythicals: Mystery Gift ──
+    mythical_orphans = {pid for pid in mythical_ids if pid not in pokemon_routes and pid <= MAX_POKEMON_ID}
+    if mythical_orphans:
+        _add_route("virtual-mystery-gift", "Mystery Gift", "Kanto", mythical_orphans, level=50)
+
+    # ── Location-based virtual routes for remaining true orphans ──
+
+    # Galar: Energy Plant (box legendaries)
+    _add_route("virtual-energy-plant", "Energy Plant", "Galar",
+               {888, 889, 890}, level=70)  # Zacian, Zamazenta, Eternatus
+
+    # Galar: Tower of Two Fists (Isle of Armor)
+    _add_route("virtual-tower-of-two-fists", "Tower of Two Fists", "Galar",
+               {891, 892}, level=60)  # Kubfu, Urshifu
+
+    # Galar: Split-Decision Ruins (Crown Tundra)
+    _add_route("virtual-split-decision-ruins", "Split-Decision Ruins", "Galar",
+               {894, 895}, level=70)  # Regieleki, Regidrago
+
+    # Hisui: Crimson Mirelands post-game
+    _add_route("virtual-hisui-post-game", "Ancient Retreat", "Hisui",
+               {905}, level=70)  # Enamorus
+
+    # Paldea: Area Zero (Paradox Pokemon + box legendaries)
+    _add_route("virtual-area-zero", "Area Zero", "Paldea",
+               {984, 985, 986, 987, 988, 989,    # Ancient Paradox
+                990, 991, 992, 993, 994, 995,      # Future Paradox
+                1005, 1006,                         # Roaring Moon, Iron Valiant
+                1007, 1008},                        # Koraidon, Miraidon
+               level=50)
+
+    # Paldea: Paldean Shrines (Ruinous Quartet)
+    _add_route("virtual-paldean-shrines", "Paldean Shrines", "Paldea",
+               {1001, 1002, 1003, 1004}, level=60)  # Wo-Chien, Chien-Pao, Ting-Lu, Chi-Yu
+
+    # Paldea: Kitakami Wilds (Teal Mask DLC)
+    _add_route("virtual-kitakami-wilds", "Kitakami Wilds", "Paldea",
+               {1012, 1013,                         # Poltchageist, Sinistcha
+                1014, 1015, 1016, 1017},             # Okidogi, Munkidori, Fezandipiti, Ogerpon
+               level=50)
+
+    # Paldea: Blueberry Academy (Indigo Disk DLC)
+    _add_route("virtual-blueberry-academy", "Blueberry Academy", "Paldea",
+               {1009, 1010,                         # Walking Wake, Iron Leaves
+                1020, 1021, 1022, 1023,              # Gouging Fire, Raging Bolt, Iron Boulder, Iron Crown
+                1024},                               # Terapagos
+               level=60)
+
+    # Paldea: Paldea Overworld (Gimmighoul roaming coins)
+    _add_route("virtual-paldea-overworld", "Paldea Overworld", "Paldea",
+               {999, 1000}, level=5)  # Gimmighoul, Gholdengo
+
+    return added
+
+
 def main() -> None:
+    merge_serebii = "--merge-serebii" in sys.argv
+
     print("PokeAPI Route Data Builder (GraphQL)")
+    if merge_serebii:
+        print("  [--merge-serebii] Will merge Serebii Gen 8-9 data")
     print("=" * 60)
 
     # 3 bulk queries
@@ -449,7 +617,14 @@ def main() -> None:
     routes, pokemon_routes = process_encounters(raw_encounters)
     print(f"  {len(routes)} routes, {len(pokemon_routes)} Pokemon with encounters")
 
-    print("Processing species...")
+    # Merge Serebii data if requested
+    if merge_serebii:
+        print("\nMerging Serebii Gen 8-9 data...")
+        routes_added, pokemon_added = merge_serebii_data(routes, pokemon_routes)
+        print(f"  {routes_added} new routes added, {pokemon_added} new Pokemon covered")
+        print(f"  Total: {len(routes)} routes, {len(pokemon_routes)} Pokemon with encounters")
+
+    print("\nProcessing species...")
     baby_ids, legendary_ids, mythical_ids, species_to_chain = process_species(raw_species)
 
     print("Processing evolutions...")
@@ -457,6 +632,11 @@ def main() -> None:
         raw_evolutions, species_to_chain
     )
     print(f"  {len(families)} families, {len(trade_evo_ids)} trade evos, {len(stone_evo_groups)} stone types")
+
+    # Virtual routes for orphans
+    print("\nAdding virtual routes...")
+    virtual_added = add_virtual_routes(routes, pokemon_routes, families, family_base, mythical_ids)
+    print(f"  {virtual_added} virtual routes added, {len(pokemon_routes)} Pokemon now with routes")
 
     # Orphans
     orphans_by_region: dict[str, set[int]] = {}

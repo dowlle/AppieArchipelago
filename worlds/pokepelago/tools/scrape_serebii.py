@@ -1,16 +1,17 @@
 """
-Supplementary scraper for Gen 8-9 encounter data from Serebii.net.
+Serebii scraper for Gen 8-9 encounter data.
 
 Fills gaps where PokeAPI has no encounter data:
-- Galar (Sword/Shield): per-Pokemon location pages
-- Paldea (Scarlet/Violet): spawn table files from pokearth map
-- Hisui (Legends Arceus): manual curation (only 7 Pokemon)
+- Galar (Sword/Shield): per-area pages on pokearth
+- Hisui (Legends Arceus): spawn tables via area page JavaScript
+- Paldea (Scarlet/Violet): spawn tables via area page JavaScript
+
+Scrapes ALL encounters (not just orphans) for cross-region route support.
 
 Usage:
     python -m worlds.pokepelago.tools.scrape_serebii
 
-Writes supplementary data to tools/serebii_encounters.json which
-build_route_data.py can merge in a future pass.
+Writes to tools/serebii_encounters.json for merging into route_data.py.
 
 Requires: requests, beautifulsoup4
     pip install requests beautifulsoup4
@@ -29,13 +30,91 @@ except ImportError:
     sys.exit(1)
 
 CACHE_DIR = Path(__file__).parent / ".serebii_cache"
-REQUEST_DELAY = 1.0  # Be polite to Serebii
+REQUEST_DELAY = 1.0
 OUTPUT_FILE = Path(__file__).parent / "serebii_encounters.json"
 
-# Pokemon names for Galar orphans (IDs 810-898) — we need their Serebii slugs
-# Import from data.py
+# Build Pokemon name → national dex ID lookup
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from worlds.pokepelago.data import POKEMON_DATA
+
+_NAME_TO_ID: dict[str, int] = {}
+_BASE_NAME_TO_ID: dict[str, int] = {}  # First word of multi-word names → ID
+for _mon in POKEMON_DATA:
+    _lower = _mon["name"].lower()
+    _NAME_TO_ID[_lower] = _mon["id"]
+    # For form-names like "Eiscue Ice", also index by base name "eiscue"
+    _parts = _lower.split()
+    if len(_parts) > 1:
+        _BASE_NAME_TO_ID.setdefault(_parts[0], _mon["id"])
+
+# Additional name mappings for Serebii variants
+_NAME_ALIASES: dict[str, str] = {
+    "nidoran♀": "nidoran-f", "nidoran♂": "nidoran-m",
+    "mr. mime": "mr. mime", "mr.mime": "mr. mime",
+    "mime jr.": "mime jr.", "mimejr.": "mime jr.",
+    "farfetch'd": "farfetch'd", "farfetchd": "farfetch'd",
+    "sirfetch'd": "sirfetch'd", "sirfetchd": "sirfetch'd",
+    "type: null": "type: null", "type:null": "type: null",
+    "flabébé": "flabebe",
+}
+
+# Regional form prefixes to strip (map to base species)
+_FORM_PREFIXES = [
+    "hisuian ", "galarian ", "alolan ", "paldean ",
+    "attack ", "defense ", "speed ",  # Deoxys
+    "heat ", "wash ", "frost ", "fan ", "mow ",  # Rotom
+    "origin ", "altered ",  # Giratina
+    "therian ", "incarnate ",  # Forces of Nature
+    "black ", "white ",  # Kyurem
+    "10% ", "50% ", "complete ",  # Zygarde
+    "dusk mane ", "dawn wings ", "ultra ",  # Necrozma
+    "ice rider ", "shadow rider ",  # Calyrex
+    "crowned ",  # Zacian/Zamazenta
+    "single strike ", "rapid strike ",  # Urshifu
+    "bloodmoon ",  # Ursaluna
+]
+
+
+def normalize_name(raw: str) -> int | None:
+    """Resolve a Serebii Pokemon name to a national dex ID."""
+    name = raw.strip().lower()
+    if not name:
+        return None
+
+    # Direct match
+    pid = _NAME_TO_ID.get(name)
+    if pid:
+        return pid
+
+    # Alias match
+    alias = _NAME_ALIASES.get(name)
+    if alias:
+        pid = _NAME_TO_ID.get(alias)
+        if pid:
+            return pid
+
+    # Strip regional/form prefixes
+    for prefix in _FORM_PREFIXES:
+        if name.startswith(prefix):
+            base = name[len(prefix):]
+            pid = _NAME_TO_ID.get(base)
+            if pid:
+                return pid
+
+    # Strip parenthetical form info: "Wormadam (Plant Cloak)" -> "wormadam"
+    paren = name.split("(")[0].strip()
+    if paren != name:
+        pid = _NAME_TO_ID.get(paren)
+        if pid:
+            return pid
+
+    # Base name fallback: "eiscue" matches "eiscue ice" (875)
+    # Handles Serebii using short names for form-Pokemon in POKEMON_DATA
+    pid = _BASE_NAME_TO_ID.get(name)
+    if pid:
+        return pid
+
+    return None
 
 
 def fetch_html(url: str) -> str | None:
@@ -53,7 +132,7 @@ def fetch_html(url: str) -> str | None:
             "User-Agent": "PokePelago-DataBuilder/1.0 (Archipelago multiworld game; non-commercial)"
         })
         if resp.status_code == 404:
-            print(f"    → 404")
+            print(f"    -> 404")
             return None
         resp.raise_for_status()
         html = resp.text
@@ -61,298 +140,455 @@ def fetch_html(url: str) -> str | None:
         time.sleep(REQUEST_DELAY)
         return html
     except requests.RequestException as e:
-        print(f"    → ERROR: {e}")
+        print(f"    -> ERROR: {e}")
         return None
 
 
-# ── Galar: Scrape per-Pokemon location pages ────────────────────────────────
-
-def scrape_galar_encounters(orphan_ids: set[int]) -> dict[str, dict]:
-    """Scrape Sword/Shield location data from Serebii for each orphan Pokemon."""
-    print("\n=== Scraping Galar (Sword/Shield) encounters ===")
-    encounters: dict[str, dict] = {}  # route_key → {display_name, region, pokemon: {id: min_level}}
-
-    for mon in POKEMON_DATA:
-        if mon["id"] not in orphan_ids:
-            continue
-        if mon["id"] < 810 or mon["id"] > 898:
-            continue
-
-        name_slug = mon["name"].lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")
-        # Serebii uses specific slug patterns
-        url = f"https://www.serebii.net/pokedex-swsh/{name_slug}/locations.shtml"
-        html = fetch_html(url)
-
-        if not html:
-            # Try alternate slug (some Pokemon have different URL patterns)
-            print(f"    Trying alternate URL for {mon['name']}...")
-            continue
-
-        soup = BeautifulSoup(html, "html.parser")
-        routes_found = _parse_swsh_locations(soup, mon["id"])
-
-        for route_name, min_level in routes_found.items():
-            route_key = f"galar-{route_name}"
-            if route_key not in encounters:
-                display_name = route_name.replace("-", " ").title()
-                encounters[route_key] = {
-                    "display_name": display_name,
-                    "region": "Galar",
-                    "pokemon": {},
-                }
-            current = encounters[route_key]["pokemon"].get(mon["id"])
-            if current is None or min_level < current:
-                encounters[route_key]["pokemon"][mon["id"]] = min_level
-
-        if routes_found:
-            print(f"    {mon['name']}: {len(routes_found)} routes")
-        else:
-            print(f"    {mon['name']}: NO routes found (gift/event?)")
-
-    return encounters
+def parse_level_range(text: str) -> int | None:
+    """Extract the minimum level from a level range string like '3 - 6' or '60'."""
+    m = re.search(r'(\d+)\s*-\s*(\d+)', text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r'(\d+)', text)
+    if m:
+        return int(m.group(1))
+    return None
 
 
-def _parse_swsh_locations(soup: BeautifulSoup, pokemon_id: int) -> dict[str, int]:
-    """Parse Serebii Sword/Shield location page to extract route → min_level."""
-    routes: dict[str, int] = {}
+# ── Galar: Scrape per-area pokearth pages ──────────────────────────────────
 
-    # Find all tables with encounter data
-    for table in soup.find_all("table"):
-        rows = table.find_all("tr")
-        for row in rows:
-            cells = row.find_all("td")
-            if len(cells) < 5:
-                continue
-
-            # Look for cells containing route names and level ranges
-            text_cells = [cell.get_text(strip=True) for cell in cells]
-
-            # Try to find a level pattern like "3-6" or "60-65"
-            for i, text in enumerate(text_cells):
-                level_match = re.search(r'(\d+)\s*-\s*(\d+)', text)
-                if level_match and i > 0:
-                    min_level = int(level_match.group(1))
-                    # The route name is typically in an earlier cell
-                    for j in range(i):
-                        route_text = text_cells[j].strip()
-                        if route_text and len(route_text) > 2 and not route_text.isdigit():
-                            # Skip weather/method names
-                            if route_text.lower() in ("all", "normal", "overcast", "raining",
-                                                       "thunderstorm", "snowing", "snowstorm",
-                                                       "sandstorm", "intense sun", "fog",
-                                                       "overworld", "random encounter",
-                                                       "fishing", "surfing", "curry"):
-                                continue
-                            route_slug = re.sub(r'[^a-z0-9]+', '-', route_text.lower()).strip('-')
-                            if route_slug and len(route_slug) > 1:
-                                if route_slug not in routes or min_level < routes[route_slug]:
-                                    routes[route_slug] = min_level
-                                break
-                    break
-
-    return routes
-
-
-# ── Paldea: Scrape spawn table files ────────────────────────────────────────
-
-def scrape_paldea_encounters(orphan_ids: set[int]) -> dict[str, dict]:
-    """Scrape Scarlet/Violet spawn tables from Serebii pokearth map."""
-    print("\n=== Scraping Paldea (Scarlet/Violet) encounters ===")
-    encounters: dict[str, dict] = {}
-
-    # Build Pokemon name → ID lookup for Paldea range
-    name_to_id = {}
-    for mon in POKEMON_DATA:
-        name_to_id[mon["name"].lower()] = mon["id"]
-
-    # Scan spawn table IDs (we don't know the range, so try sequentially)
-    consecutive_404s = 0
-    table_id = 1
-
-    while consecutive_404s < 20 and table_id < 500:
-        url = f"https://www.serebii.net/pokearth/paldea/spawntable/{table_id}.txt"
-        html = fetch_html(url)
-
-        if not html:
-            consecutive_404s += 1
-            table_id += 1
-            continue
-        consecutive_404s = 0
-
-        # Parse the spawn table HTML
-        soup = BeautifulSoup(html, "html.parser")
-        pokemon_data = _parse_sv_spawn_table(soup, name_to_id)
-
-        if pokemon_data:
-            route_key = f"paldea-area-{table_id}"
-            # Try to extract a location name from the page
-            location_name = _extract_sv_location_name(soup, table_id)
-            encounters[route_key] = {
-                "display_name": location_name,
-                "region": "Paldea",
-                "pokemon": pokemon_data,
-            }
-
-        table_id += 1
-
-    print(f"  Scraped {len(encounters)} Paldea areas")
-    return encounters
+# Area slug → display name for all Galar areas
+GALAR_AREAS: dict[str, str] = {
+    # Main routes
+    "route1": "Route 1", "route2": "Route 2", "route3": "Route 3",
+    "route4": "Route 4", "route5": "Route 5", "route6": "Route 6",
+    "route7": "Route 7", "route8": "Route 8", "route9": "Route 9",
+    "route10": "Route 10",
+    # Towns with encounters
+    "slumberingweald": "Slumbering Weald",
+    "galarmine": "Galar Mine", "galarmine2": "Galar Mine No. 2",
+    "motostokeoutskirts": "Motostoke Outskirts",
+    "glimwoodtangle": "Glimwood Tangle",
+    "route9tunnel": "Route 9 Tunnel",
+    # Wild Area South
+    "meetupspot": "Meetup Spot", "rollingfields": "Rolling Fields",
+    "dappledgrove": "Dappled Grove", "watchtowerruins": "Watchtower Ruins",
+    "eastlakeaxewell": "East Lake Axewell", "westlakeaxewell": "West Lake Axewell",
+    "axewseye": "Axew's Eye", "southlakemiloch": "South Lake Miloch",
+    "giantsseat": "Giant's Seat",
+    # Wild Area North
+    "northlakemiloch": "North Lake Miloch",
+    "motostokeriverbank": "Motostoke Riverbank",
+    "bridgefield": "Bridge Field", "stonywilderness": "Stony Wilderness",
+    "dustybowl": "Dusty Bowl", "giantsmirror": "Giant's Mirror",
+    "hammerlockhills": "Hammerlocke Hills", "giantscap": "Giant's Cap",
+    "lakeofoutrage": "Lake of Outrage",
+    # Isle of Armor
+    "fieldsofhonor": "Fields of Honor", "soothingwetlands": "Soothing Wetlands",
+    "forestoffocus": "Forest of Focus", "challengebeach": "Challenge Beach",
+    "challengeroad": "Challenge Road", "courageouscavern": "Courageous Cavern",
+    "brawlerscave": "Brawlers' Cave", "looplagoon": "Loop Lagoon",
+    "traininglowlands": "Training Lowlands", "warmuptunnel": "Warm-Up Tunnel",
+    "potbottomdesert": "Potbottom Desert",
+    "honeycalmisland": "Honeycalm Island", "honeycalmsea": "Honeycalm Sea",
+    "insularsea": "Insular Sea", "steppingstonesea": "Stepping-Stone Sea",
+    "workoutsea": "Workout Sea",
+    # Crown Tundra
+    "slipperyslope": "Slippery Slope", "frostpointfield": "Frostpoint Field",
+    "giantsbed": "Giant's Bed", "oldcemetery": "Old Cemetery",
+    "snowslideslope": "Snowslide Slope", "tunneltothetop": "Tunnel to the Top",
+    "pathtothepeak": "Path to the Peak", "crownshrine": "Crown Shrine",
+    "giantsfoot": "Giant's Foot", "roaringseacaves": "Roaring-Sea Caves",
+    "frigidsea": "Frigid Sea", "threepointpass": "Three-Point Pass",
+    "ballimlake": "Ballimere Lake", "lakesidecave": "Lakeside Cave",
+    "dynatreehill": "Dyna Tree Hill",
+}
 
 
-def _parse_sv_spawn_table(soup: BeautifulSoup, name_to_id: dict[str, int]) -> dict[int, int]:
-    """Parse a Serebii SV spawn table to extract pokemon_id → min_level."""
+def scrape_galar_area(slug: str) -> dict[int, int]:
+    """Scrape a single Galar area page for Pokemon encounters.
+
+    Returns {pokemon_id: min_level}.
+    Galar area pages use the same class="name"/class="level" pattern as spawn tables.
+    """
+    url = f"https://www.serebii.net/pokearth/galar/{slug}.shtml"
+    html = fetch_html(url)
+    if not html:
+        return {}
+
+    soup = BeautifulSoup(html, "html.parser")
     pokemon_levels: dict[int, int] = {}
 
-    # The spawn tables have Pokemon names as alt text on images
-    # and levels in cells with "Level" header
-    all_names: list[str] = []
-    all_levels: list[int] = []
+    name_cells = soup.find_all("td", class_="name")
+    level_cells = soup.find_all("td", class_="level")
 
-    for img in soup.find_all("img", class_="wildsprite"):
-        alt = img.get("alt", "").strip()
-        if alt:
-            all_names.append(alt.lower())
+    for i, name_cell in enumerate(name_cells):
+        raw_name = name_cell.get_text(strip=True)
+        pid = normalize_name(raw_name)
+        if not pid:
+            continue
 
-    for td in soup.find_all("td", class_="type"):
-        text = td.get_text(strip=True)
-        level_match = re.search(r'Level\s*(\d+)\s*-\s*(\d+)', text)
-        if level_match:
-            all_levels.append(int(level_match.group(1)))
-        else:
-            level_match = re.search(r'Level\s*(\d+)', text)
-            if level_match:
-                all_levels.append(int(level_match.group(1)))
+        level = None
+        if i < len(level_cells):
+            level = parse_level_range(level_cells[i].get_text(strip=True))
+        if level is None:
+            level = 5
 
-    # Match names to levels (they appear in the same order)
-    for i, name in enumerate(all_names):
-        pid = name_to_id.get(name)
-        if pid and i < len(all_levels):
-            min_level = all_levels[i]
-            if pid not in pokemon_levels or min_level < pokemon_levels[pid]:
-                pokemon_levels[pid] = min_level
+        if pid not in pokemon_levels or level < pokemon_levels[pid]:
+            pokemon_levels[pid] = level
 
     return pokemon_levels
 
 
-def _extract_sv_location_name(soup: BeautifulSoup, table_id: int) -> str:
-    """Try to extract a readable location name from the spawn table."""
-    # Check for an "interact" class cell which usually has the game title
-    # The actual location name may not be in the spawn table itself
-    return f"Paldea Area {table_id}"
+def scrape_all_galar() -> dict[str, dict]:
+    """Scrape all Galar area pages for encounter data."""
+    print("\n=== Scraping Galar (Sword/Shield) encounters ===")
+    encounters: dict[str, dict] = {}
+
+    for slug, display_name in GALAR_AREAS.items():
+        pokemon = scrape_galar_area(slug)
+        if pokemon:
+            route_key = f"galar-{slug}"
+            encounters[route_key] = {
+                "display_name": display_name,
+                "region": "Galar",
+                "pokemon": pokemon,
+            }
+            print(f"    {display_name}: {len(pokemon)} Pokemon")
+        else:
+            print(f"    {display_name}: no data")
+
+    print(f"  Total: {len(encounters)} Galar routes")
+    return encounters
 
 
-# ── Hisui: Manual curation ──────────────────────────────────────────────────
+# ── Hisui: Scrape spawn tables via area page JavaScript ────────────────────
 
-def get_hisui_encounters() -> dict[str, dict]:
-    """Manually curated Hisui encounters for the 7 exclusive Pokemon."""
-    print("\n=== Adding Hisui (Legends Arceus) encounters (manual) ===")
-    # Hisui-exclusive Pokemon (899-905) and their locations in Legends Arceus
-    return {
-        "hisui-obsidian-fieldlands": {
-            "display_name": "Obsidian Fieldlands",
-            "region": "Hisui",
-            "pokemon": {
-                899: 40,  # Wyrdeer — evolves from Stantler
-                901: 50,  # Kleavor — evolves from Scyther
-            },
-        },
-        "hisui-crimson-mirelands": {
-            "display_name": "Crimson Mirelands",
-            "region": "Hisui",
-            "pokemon": {
-                903: 50,  # Sneasler — evolves from Sneasel
-                904: 50,  # Overqwil — evolves from Qwilfish
-            },
-        },
-        "hisui-coronet-highlands": {
-            "display_name": "Coronet Highlands",
-            "region": "Hisui",
-            "pokemon": {
-                900: 50,  # Ursaluna — evolves from Ursaring
-            },
-        },
-        "hisui-alabaster-icelands": {
-            "display_name": "Alabaster Icelands",
-            "region": "Hisui",
-            "pokemon": {
-                902: 56,  # Basculegion — evolves from Basculin
-            },
-        },
-        "hisui-ancient-retreat": {
-            "display_name": "Ancient Retreat",
-            "region": "Hisui",
-            "pokemon": {
-                905: 70,  # Enamorus — legendary, post-game
-            },
-        },
-    }
+HISUI_AREAS: dict[str, str] = {
+    "obsidianfieldlands": "Obsidian Fieldlands",
+    "crimsonmirelands": "Crimson Mirelands",
+    "cobaltcoastlands": "Cobalt Coastlands",
+    "coronethighlands": "Coronet Highlands",
+    "alabastericelands": "Alabaster Icelands",
+}
+
+
+def extract_spawn_table_ids(html: str) -> list[int]:
+    """Extract standard Pokemon spawn table IDs from pokearth area page JavaScript.
+
+    Looks for pmarkers entries with pokeballIcon or alphaIcon layers.
+    """
+    table_ids: list[int] = []
+
+    # Match tableID values from pmarkers JavaScript array
+    # Pattern: {... tableID: 42, layer: layPokeball} or {... tableID: 82, layer: layAlpha}
+    for m in re.finditer(r'tableID:\s*(\d+)\s*,\s*layer:\s*(lay\w+)', html):
+        table_id = int(m.group(1))
+        layer = m.group(2)
+        if layer in ("layPokeball", "layAlpha"):
+            table_ids.append(table_id)
+
+    return sorted(set(table_ids))
+
+
+def parse_hisui_spawn_table(html: str) -> dict[int, int]:
+    """Parse a Hisui spawn table HTML for Pokemon names and levels.
+
+    Format: class="name" cells for names, class="level" cells for levels.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    pokemon_levels: dict[int, int] = {}
+
+    name_cells = soup.find_all("td", class_="name")
+    level_cells = soup.find_all("td", class_="level")
+
+    for i, name_cell in enumerate(name_cells):
+        raw_name = name_cell.get_text(strip=True)
+        pid = normalize_name(raw_name)
+        if not pid:
+            continue
+
+        level = None
+        if i < len(level_cells):
+            level = parse_level_range(level_cells[i].get_text(strip=True))
+        if level is None:
+            level = 5
+
+        if pid not in pokemon_levels or level < pokemon_levels[pid]:
+            pokemon_levels[pid] = level
+
+    return pokemon_levels
+
+
+def scrape_all_hisui() -> dict[str, dict]:
+    """Scrape all Hisui areas by extracting spawn table IDs from area pages."""
+    print("\n=== Scraping Hisui (Legends Arceus) encounters ===")
+    encounters: dict[str, dict] = {}
+
+    for slug, display_name in HISUI_AREAS.items():
+        area_url = f"https://www.serebii.net/pokearth/hisui/{slug}.shtml"
+        area_html = fetch_html(area_url)
+        if not area_html:
+            print(f"    {display_name}: failed to fetch area page")
+            continue
+
+        table_ids = extract_spawn_table_ids(area_html)
+        print(f"    {display_name}: {len(table_ids)} spawn tables to fetch")
+
+        area_pokemon: dict[int, int] = {}
+        for tid in table_ids:
+            table_url = f"https://www.serebii.net/pokearth/hisui/spawntable/{tid}.txt"
+            table_html = fetch_html(table_url)
+            if not table_html or len(table_html.strip()) < 10:
+                continue
+            pokemon = parse_hisui_spawn_table(table_html)
+            for pid, level in pokemon.items():
+                if pid not in area_pokemon or level < area_pokemon[pid]:
+                    area_pokemon[pid] = level
+
+        if area_pokemon:
+            route_key = f"hisui-{slug}"
+            encounters[route_key] = {
+                "display_name": display_name,
+                "region": "Hisui",
+                "pokemon": area_pokemon,
+            }
+            print(f"    {display_name}: {len(area_pokemon)} unique Pokemon")
+        else:
+            print(f"    {display_name}: no Pokemon found")
+
+    print(f"  Total: {len(encounters)} Hisui routes")
+    return encounters
+
+
+# ── Paldea: Scrape spawn tables via area page JavaScript ───────────────────
+
+PALDEA_AREAS: dict[str, str] = {
+    # Province areas (Serebii spells out numbers, no hyphens)
+    "southprovinceareaone": "South Province (Area 1)",
+    "southprovinceareatwo": "South Province (Area 2)",
+    "southprovinceareathree": "South Province (Area 3)",
+    "southprovinceareafour": "South Province (Area 4)",
+    "southprovinceareafive": "South Province (Area 5)",
+    "southprovinceareasix": "South Province (Area 6)",
+    "eastprovinceareaone": "East Province (Area 1)",
+    "eastprovinceareatwo": "East Province (Area 2)",
+    "eastprovinceareathree": "East Province (Area 3)",
+    "westprovinceareaone": "West Province (Area 1)",
+    "westprovinceareatwo": "West Province (Area 2)",
+    "westprovinceareathree": "West Province (Area 3)",
+    "northprovinceareaone": "North Province (Area 1)",
+    "northprovinceareatwo": "North Province (Area 2)",
+    "northprovinceareathree": "North Province (Area 3)",
+    # Named areas
+    "socarrattrail": "Socarrat Trail",
+    "glaseadomountain": "Glaseado Mountain",
+    "dalizapapassage": "Dalizapa Passage",
+    "tagtreethicket": "Tagtree Thicket",
+    "casseroyalake": "Casseroya Lake",
+    "asadodesert": "Asado Desert",
+    "cabopoco": "Cabo Poco",
+    "pocopath": "Poco Path",
+    "inletgrotto": "Inlet Grotto",
+    "alfornada": "Alfornada",
+    "alfornadacavern": "Alfornada Cavern",
+    "areazero": "Area Zero",
+    "eastpaldeansea": "East Paldean Sea",
+    "westpaldeansea": "West Paldean Sea",
+    "northpaldeansea": "North Paldean Sea",
+    "southpaldeansea": "South Paldean Sea",
+}
+
+
+def parse_paldea_spawn_table(html: str) -> dict[int, int]:
+    """Parse a Paldea spawn table HTML for Pokemon names and levels.
+
+    Format: class="name" cells for names, level in class="type" cells containing "<b>Level</b>".
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    pokemon_levels: dict[int, int] = {}
+
+    # Find all name cells
+    name_cells = soup.find_all("td", class_="name")
+
+    # Find all level cells: class="type" containing "Level"
+    level_cells = []
+    for td in soup.find_all("td", class_="type"):
+        text = td.get_text()
+        if "Level" in text:
+            level_cells.append(td)
+
+    for i, name_cell in enumerate(name_cells):
+        raw_name = name_cell.get_text(strip=True)
+        pid = normalize_name(raw_name)
+        if not pid:
+            continue
+
+        level = None
+        if i < len(level_cells):
+            level = parse_level_range(level_cells[i].get_text())
+        if level is None:
+            level = 5
+
+        if pid not in pokemon_levels or level < pokemon_levels[pid]:
+            pokemon_levels[pid] = level
+
+    return pokemon_levels
+
+
+def scrape_all_paldea() -> dict[str, dict]:
+    """Scrape Paldea spawn tables sequentially.
+
+    Paldea's pokearth pages include ALL spawn table IDs globally (not per-area),
+    so we can't map tables to specific areas from the page JavaScript.
+    Instead, we scan all spawn tables and group Pokemon by their biome field.
+    """
+    print("\n=== Scraping Paldea (Scarlet/Violet) encounters ===")
+
+    # Fetch one area page to get the full set of table IDs
+    area_url = f"https://www.serebii.net/pokearth/paldea/southprovinceareaone.shtml"
+    area_html = fetch_html(area_url)
+    if not area_html:
+        print("    Failed to fetch Paldea area page for table IDs")
+        return {}
+
+    table_ids = extract_spawn_table_ids(area_html)
+    print(f"    Found {len(table_ids)} spawn tables to scan")
+
+    # Group Pokemon by biome from spawn table data
+    biome_pokemon: dict[str, dict[int, int]] = {}
+
+    for tid in table_ids:
+        table_url = f"https://www.serebii.net/pokearth/paldea/spawntable/{tid}.txt"
+        table_html = fetch_html(table_url)
+        if not table_html or len(table_html.strip()) < 10:
+            continue
+
+        soup = BeautifulSoup(table_html, "html.parser")
+        name_cells = soup.find_all("td", class_="name")
+
+        # Extract biome and level per Pokemon entry
+        type_cells = soup.find_all("td", class_="type")
+        # Parse entries: each Pokemon has multiple type cells (type icon, level, biome, location, time, etc.)
+        entry_biomes: list[str] = []
+        entry_levels: list[int | None] = []
+        for td in type_cells:
+            text = td.get_text()
+            if "Biomes" in text:
+                biome = text.replace("Biomes", "").strip().split("\n")[0].strip()
+                if not biome:
+                    biome = "Unknown"
+                entry_biomes.append(biome)
+            elif "Level" in text:
+                entry_levels.append(parse_level_range(text))
+
+        for i, name_cell in enumerate(name_cells):
+            raw_name = name_cell.get_text(strip=True)
+            pid = normalize_name(raw_name)
+            if not pid:
+                continue
+
+            biome = entry_biomes[i] if i < len(entry_biomes) else "Unknown"
+            level = entry_levels[i] if i < len(entry_levels) else None
+            if level is None:
+                level = 5
+
+            if biome not in biome_pokemon:
+                biome_pokemon[biome] = {}
+            if pid not in biome_pokemon[biome] or level < biome_pokemon[biome][pid]:
+                biome_pokemon[biome][pid] = level
+
+    # Collapse multi-biome strings into primary biome (first word)
+    primary_pokemon: dict[str, dict[int, int]] = {}
+    for biome, pokemon in biome_pokemon.items():
+        primary = biome.split(",")[0].strip()
+        if not primary or primary == "Unknown":
+            primary = "Wilderness"
+        if primary not in primary_pokemon:
+            primary_pokemon[primary] = {}
+        for pid, level in pokemon.items():
+            if pid not in primary_pokemon[primary] or level < primary_pokemon[primary][pid]:
+                primary_pokemon[primary][pid] = level
+
+    # Convert to route entries
+    encounters: dict[str, dict] = {}
+    for biome, pokemon in sorted(primary_pokemon.items()):
+        slug = re.sub(r'[^a-z0-9]+', '-', biome.lower()).strip('-')
+        route_key = f"paldea-{slug}"
+        encounters[route_key] = {
+            "display_name": f"Paldea {biome}",
+            "region": "Paldea",
+            "pokemon": pokemon,
+        }
+        print(f"    Paldea {biome}: {len(pokemon)} Pokemon")
+
+    print(f"  Total: {len(encounters)} Paldea biome routes")
+    return encounters
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    print("Serebii Supplementary Scraper (Gen 8-9)")
+    print("Serebii Encounter Scraper (Gen 8-9)")
     print("=" * 60)
-
-    # Load orphan IDs from the generated route_data
-    try:
-        from worlds.pokepelago.route_data import ORPHAN_IDS
-    except ImportError:
-        print("ERROR: Run build_route_data.py first to generate route_data.py")
-        sys.exit(1)
-
-    galar_orphans = {pid for pid in ORPHAN_IDS if 810 <= pid <= 898}
-    paldea_orphans = {pid for pid in ORPHAN_IDS if 906 <= pid <= 1025}
-
-    print(f"Galar orphans to scrape: {len(galar_orphans)}")
-    print(f"Paldea orphans to scrape: {len(paldea_orphans)}")
+    print(f"Pokemon name lookup: {len(_NAME_TO_ID)} entries")
 
     all_encounters: dict[str, dict] = {}
 
-    # Galar
-    galar = scrape_galar_encounters(galar_orphans)
+    galar = scrape_all_galar()
     all_encounters.update(galar)
 
-    # Paldea
-    paldea = scrape_paldea_encounters(paldea_orphans)
-    all_encounters.update(paldea)
-
-    # Hisui
-    hisui = get_hisui_encounters()
+    hisui = scrape_all_hisui()
     all_encounters.update(hisui)
 
+    paldea = scrape_all_paldea()
+    all_encounters.update(paldea)
+
     # Summary
-    total_pokemon = set()
+    total_pokemon: set[int] = set()
     for route in all_encounters.values():
         total_pokemon.update(route["pokemon"].keys())
 
-    remaining_orphans = (galar_orphans | paldea_orphans | set(range(899, 906))) - total_pokemon
-
-    print(f"\n{'='*60}")
-    print(f"SUMMARY")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("SUMMARY")
+    print(f"{'=' * 60}")
     print(f"Routes scraped: {len(all_encounters)}")
-    print(f"  Galar: {len(galar)}")
-    print(f"  Paldea: {len(paldea)}")
-    print(f"  Hisui: {len(hisui)}")
-    print(f"Pokemon found: {len(total_pokemon)}")
-    print(f"Remaining orphans: {len(remaining_orphans)}")
-    if remaining_orphans:
-        print(f"  IDs: {sorted(remaining_orphans)}")
+    print(f"  Galar: {len(galar)} routes")
+    print(f"  Hisui: {len(hisui)} routes")
+    print(f"  Paldea: {len(paldea)} routes")
+    print(f"Unique Pokemon found: {len(total_pokemon)}")
+
+    # Show which Gen 8-9 Pokemon are still missing
+    gen8_ids = set(range(810, 906))
+    gen9_ids = set(range(906, 1026))
+    gen8_found = total_pokemon & gen8_ids
+    gen9_found = total_pokemon & gen9_ids
+    gen8_missing = gen8_ids - total_pokemon
+    gen9_missing = gen9_ids - total_pokemon
+    print(f"\nGen 8 (Galar+Hisui): {len(gen8_found)}/{len(gen8_ids)} found, {len(gen8_missing)} missing")
+    print(f"Gen 9 (Paldea):      {len(gen9_found)}/{len(gen9_ids)} found, {len(gen9_missing)} missing")
+
+    if gen8_missing:
+        print(f"  Missing Gen 8 IDs: {sorted(gen8_missing)[:20]}{'...' if len(gen8_missing) > 20 else ''}")
+    if gen9_missing:
+        print(f"  Missing Gen 9 IDs: {sorted(gen9_missing)[:20]}{'...' if len(gen9_missing) > 20 else ''}")
+
+    # Also show cross-gen Pokemon found (Gen 1-7 Pokemon on Gen 8-9 routes)
+    cross_gen = total_pokemon - gen8_ids - gen9_ids
+    print(f"\nCross-gen Pokemon (Gen 1-7 on Gen 8-9 routes): {len(cross_gen)}")
 
     # Write output
-    # Convert sets to lists for JSON serialization
     json_data = {}
-    for key, route in all_encounters.items():
+    for key, route in sorted(all_encounters.items()):
         json_data[key] = {
             "display_name": route["display_name"],
             "region": route["region"],
-            "pokemon": {str(k): v for k, v in route["pokemon"].items()},
+            "pokemon": {str(k): v for k, v in sorted(route["pokemon"].items())},
         }
 
     OUTPUT_FILE.write_text(json.dumps(json_data, indent=2), encoding="utf-8")
     print(f"\nWrote {OUTPUT_FILE}")
-    print("Merge this into route_data.py by re-running build_route_data.py with --merge-serebii")
+    print("Merge into route_data.py by re-running build_route_data.py with --merge-serebii")
 
 
 if __name__ == "__main__":

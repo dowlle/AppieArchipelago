@@ -1,5 +1,6 @@
 from BaseClasses import Item, ItemClassification
 from .data import POKEMON_DATA, GEN_1_TYPES, GAME_REGIONS
+from .route_data import ROUTE_DATA, EVOLUTION_FAMILIES
 
 # A random high number to ensure our IDs don't overlap with other games
 ITEM_ID_OFFSET = 8574000
@@ -65,6 +66,28 @@ _GATE_ITEMS = {
     "Shiny Charm":     (ITEM_ID_OFFSET + 6020, ItemClassification.filler),
 }
 item_data_table.update(_GATE_ITEMS)
+
+# 7. Route Key items (Progression) — one per route in route_data.py
+# IDs: ITEM_ID_OFFSET + 7000 + sequential index. Filtered per-game in create_items().
+ROUTE_KEY_OFFSET = 7000
+_route_keys_sorted = sorted(ROUTE_DATA.keys())
+ROUTE_KEY_NAMES: dict[str, str] = {}  # route_key → item name
+for _i, _route_key in enumerate(_route_keys_sorted):
+    _display = ROUTE_DATA[_route_key]["display_name"]
+    _item_name = f"{_display} Key"
+    item_data_table[_item_name] = (ITEM_ID_OFFSET + ROUTE_KEY_OFFSET + _i, ItemClassification.progression)
+    ROUTE_KEY_NAMES[_route_key] = _item_name
+
+# 8. Line Unlock items (Progression) — one per evolution family
+# IDs: ITEM_ID_OFFSET + 9000 + base_pokemon_id. Filtered per-game in create_items().
+LINE_UNLOCK_OFFSET = 9000
+_name_map = {m["id"]: m["name"] for m in POKEMON_DATA}
+LINE_UNLOCK_NAMES: dict[int, str] = {}  # base_id → item name
+for _base_id in sorted(EVOLUTION_FAMILIES.keys()):
+    _base_name = _name_map.get(_base_id, f"Pokemon {_base_id}")
+    _item_name = f"{_base_name} Line"
+    item_data_table[_item_name] = (ITEM_ID_OFFSET + LINE_UNLOCK_OFFSET + _base_id, ItemClassification.progression)
+    LINE_UNLOCK_NAMES[_base_id] = _item_name
 
 # Offsets exported for reference (client uses ITEM_ID_OFFSET + these to identify items)
 GYM_BADGE_OFFSET = 6000

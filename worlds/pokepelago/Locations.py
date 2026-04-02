@@ -1,5 +1,6 @@
 from BaseClasses import Location
 from .data import POKEMON_DATA, GEN_1_TYPES
+from .route_data import ROUTE_DATA
 
 # Shifted away from item IDs (8574000) to prevent collisions.
 LOCATION_ID_OFFSET = 8560000
@@ -47,6 +48,17 @@ for p_type in GEN_1_TYPES:
     for step in ALL_TYPE_MILESTONE_STEPS:
         if step <= type_counts[p_type]:
             location_table[f"Caught {step} {p_type} Pokemon"] = LOCATION_ID_OFFSET + 20_000 + (GEN_1_TYPES.index(p_type) * 1000) + step
+
+# 5. Route Completion Milestones — one per route, created when route_locks is ON
+# IDs: LOCATION_ID_OFFSET + 40_000 + sequential index (must not overlap with type milestones at 20_000-38_000)
+ROUTE_MILESTONE_NAMES: dict[str, str] = {}  # route_key → location name
+_route_keys_sorted = sorted(ROUTE_DATA.keys())
+for _i, _route_key in enumerate(_route_keys_sorted):
+    _display = ROUTE_DATA[_route_key]["display_name"]
+    _loc_name = f"Cleared {_display}"
+    location_table[_loc_name] = LOCATION_ID_OFFSET + 40_000 + _i
+    ROUTE_MILESTONE_NAMES[_route_key] = _loc_name
+
 
 class PokepelagoLocation(Location):
     game: str = "Pokepelago"

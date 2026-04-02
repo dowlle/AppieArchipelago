@@ -32,7 +32,7 @@ class StartingLocationCount(Range):
     display_name = "Starting Location Count"
     range_start = 0
     range_end = 8
-    default = 8
+    default = 4
 
 
 class Regions(OptionSet):
@@ -55,7 +55,7 @@ class RandomRegionCount(NamedRange):
     range_start = 0
     range_end = 10
     special_range_names = {"disabled": 0, "random": -1}
-    default = 0
+    default = 3
 
 
 class GroupHisuiGalar(Toggle):
@@ -84,7 +84,7 @@ class GoalPercentage(Range):
     display_name = "Goal Percentage"
     range_start = 1
     range_end = 100
-    default = 100
+    default = 80
 
 
 class GoalCount(Range):
@@ -187,21 +187,50 @@ class StarterPokemon(Choice):
     default = 0
 
 
+class RouteLocks(Toggle):
+    """Require Route Key items to access Pokemon on specific routes.
+    Each route in the active regions adds a Route Key to the item pool.
+    A Pokemon is accessible if you have ANY Route Key for a route it appears on.
+    Greatly increases progression item count and reduces filler."""
+    display_name = "Route Locks"
+    default = 0
+
+
+class LineLocks(Toggle):
+    """Require a Line Unlock item for each evolution family.
+    Every active evolution family adds one Line Unlock to the item pool.
+    Required for ALL members of the family (base forms and evolutions).
+    Evolution-only Pokemon inherit route access from their base form.
+    Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks)."""
+    display_name = "Line Locks"
+    default = 0
+
+
+class BadgeLevelGating(Toggle):
+    """Gate Pokemon behind Gym Badges based on their encounter level.
+    Higher-level Pokemon require more badges (Lv1-10: 0 badges, Lv11-20: 1, etc.).
+    When combined with Legendary Locks, uses the higher requirement of the two.
+    Requires Gym Badges in the item pool (enabled automatically)."""
+    display_name = "Badge Level Gating"
+    default = 0
+
+
 class LegendaryLocks(Toggle):
     """Gate legendary Pokemon behind Gym Badge items.
     Collect 6 Badges for sub-legendaries (trios, regis, tapus, etc.),
     7 Badges for box legendaries (version mascots), and
     8 Badges for mythics (event-only Pokemon like Mew, Celebi, Arceus).
+    When Badge Level Gating is also on, uses the higher badge requirement.
     8 Gym Badge items are added to the item pool when enabled."""
     display_name = "Legendary Locks"
-    default = 0
+    default = 1
 
 
 class TradeLocks(Toggle):
     """Require a Link Cable item before guessing trade-evolved Pokemon
     (Alakazam, Machamp, Golem, Gengar, Scizor, Steelix, Conkeldurr, etc.)."""
     display_name = "Trade Evolution Lock"
-    default = 0
+    default = 1
 
 
 class BabyLocks(Toggle):
@@ -248,7 +277,7 @@ class StoneLocks(Toggle):
     Each stone type that gates at least one active Pokemon adds one stone item to the pool.
     Examples: Fire Stone → Arcanine/Ninetales/Flareon, Water Stone → Starmie/Vaporeon/Cloyster."""
     display_name = "Stone Evolution Lock"
-    default = 0
+    default = 1
 
 
 class MasterBallBypassGates(Toggle):
@@ -332,6 +361,9 @@ class PokepelagoOptions(PerGameCommonOptions):
     starter_region: StarterRegion
     starter_pokemon: StarterPokemon
     starting_location_count: StartingLocationCount
+    route_locks_enabled: RouteLocks
+    line_locks: LineLocks
+    badge_level_gating: BadgeLevelGating
     legendary_locks: LegendaryLocks
     trade_locks: TradeLocks
     baby_locks: BabyLocks
@@ -363,7 +395,8 @@ class PokepelagoOptions(PerGameCommonOptions):
 
 pokepelago_option_groups: list[OptionGroup] = [
     OptionGroup("Regions", [Regions, RandomRegionCount, GroupHisuiGalar, RegionLocks, StarterRegion, StarterPokemon]),
-    OptionGroup("Lock Gates", [EnableTypeLocks, LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
+    OptionGroup("Lock Gates", [EnableTypeLocks, RouteLocks, LineLocks, BadgeLevelGating,
+                               LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
     OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
 ]

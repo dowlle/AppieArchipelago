@@ -1,0 +1,133 @@
+"""
+Custom rule_builder rules for Pokepelago.
+
+CanAccessNPokemon: checks whether >= N Pokemon are logically accessible,
+used for milestone locations and the victory condition.
+"""
+from __future__ import annotations
+
+import dataclasses
+from typing import TYPE_CHECKING, ClassVar
+
+from typing_extensions import override
+
+from BaseClasses import CollectionState
+from NetUtils import JSONMessagePart
+from rule_builder.rules import Rule
+
+if TYPE_CHECKING:
+    from worlds.pokepelago import PokepelagoWorld
+
+
+@dataclasses.dataclass()
+class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
+    """Rule that checks if the player can logically access at least `target_count` Pokemon.
+
+    Works by summing pre-grouped requirement buckets: each bucket has a region pass,
+    type key set, extra gate set, and a count of Pokemon sharing those exact requirements.
+    """
+
+    target_count: int
+    group_key: str = "global"
+    """'global' for overall milestones, or a type name (e.g. 'Fire') for type milestones."""
+
+    @override
+    def _instantiate(self, world: "PokepelagoWorld") -> Rule.Resolved:
+        if self.group_key == "global":
+            groups = world._milestone_req_groups
+        else:
+            groups = world._type_milestone_req_groups.get(self.group_key, [])
+
+        # Convert to a hashable tuple-of-tuples for the frozen Resolved dataclass.
+        # Original: (region_req: str|None, type_reqs: frozenset, extra_reqs: frozenset, count: int)
+        frozen_groups = tuple(
+            (rr, tuple(sorted(tr)) if tr else (), tuple(sorted(er)) if er else (), c)
+            for rr, tr, er, c in groups
+        )
+
+        return self.Resolved(
+            target_count=self.target_count,
+            req_groups=frozen_groups,
+            player=world.player,
+            caching_enabled=getattr(world, "rule_caching_enabled", False),
+        )
+
+    class Resolved(Rule.Resolved):
+        target_count: int
+        req_groups: tuple
+        """Tuple of (region_req, type_reqs_tuple, extra_reqs_tuple, count) buckets."""
+
+        force_recalculate: ClassVar[bool] = True
+        """Milestone rules depend on aggregate item state — always re-evaluate."""
+
+        @override
+        def _evaluate(self, state: CollectionState) -> bool:
+            accessible = 0
+            prog = state.prog_items[self.player]
+            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+                if region_req and prog[region_req] < 1:
+                    continue
+                if type_reqs:
+                    if any(prog[tk] < 1 for tk in type_reqs):
+                        continue
+                if extra_reqs:
+                    if any(prog[item] < n for item, n in extra_reqs):
+                        continue
+                accessible += count
+                if accessible >= self.target_count:
+                    return True
+            return False
+
+        @override
+        def item_dependencies(self) -> dict[str, set[int]]:
+            items: dict[str, set[int]] = {}
+            self_id = {id(self)}
+            for region_req, type_reqs, extra_reqs, _ in self.req_groups:
+                if region_req:
+                    items.setdefault(region_req, set()).update(self_id)
+                for tk in type_reqs:
+                    items.setdefault(tk, set()).update(self_id)
+                for item, _ in extra_reqs:
+                    items.setdefault(item, set()).update(self_id)
+            return items
+
+        @override
+        def explain_str(self, state: CollectionState | None = None) -> str:
+            if state is None:
+                return f"Need {self.target_count} accessible Pokemon"
+            accessible = 0
+            prog = state.prog_items[self.player]
+            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+                if region_req and prog[region_req] < 1:
+                    continue
+                if type_reqs and any(prog[tk] < 1 for tk in type_reqs):
+                    continue
+                if extra_reqs and any(prog[item] < n for item, n in extra_reqs):
+                    continue
+                accessible += count
+            met = accessible >= self.target_count
+            status = "Met" if met else "Not met"
+            return f"{status}: {accessible}/{self.target_count} Pokemon accessible"
+
+        @override
+        def explain_json(self, state: CollectionState | None = None) -> list[JSONMessagePart]:
+            if state is None:
+                return [{"type": "text", "text": f"Need {self.target_count} accessible Pokemon"}]
+
+            accessible = 0
+            prog = state.prog_items[self.player]
+            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+                if region_req and prog[region_req] < 1:
+                    continue
+                if type_reqs and any(prog[tk] < 1 for tk in type_reqs):
+                    continue
+                if extra_reqs and any(prog[item] < n for item, n in extra_reqs):
+                    continue
+                accessible += count
+
+            met = accessible >= self.target_count
+            color = "green" if met else "salmon"
+            return [
+                {"type": "color", "color": color, "text": str(accessible)},
+                {"type": "text", "text": f"/{self.target_count} Pokemon accessible"},
+            ]

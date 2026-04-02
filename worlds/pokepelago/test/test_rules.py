@@ -15,6 +15,21 @@ from test.bases import WorldTestBase
 from test.general import setup_multiworld
 from worlds.pokepelago import PokepelagoWorld
 
+# Shared base options: disable random regions and all lock gates so each test
+# class only needs to enable the specific options it is testing.
+_BASE = {
+    "random_region_count": 0,
+    "type_locks": 0,
+    "region_locks": 0,
+    "legendary_locks": 0,
+    "trade_locks": 0,
+    "baby_locks": 0,
+    "fossil_locks": 0,
+    "ultra_beast_locks": 0,
+    "paradox_locks": 0,
+    "stone_locks": 0,
+}
+
 
 # ---------------------------------------------------------------------------
 # Type Key gating
@@ -24,9 +39,9 @@ class TestTypeKeyRules(WorldTestBase):
     """Kanto only, dexsanity + type_locks on, Charmander as starter (Fire type pre-collected)."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "type_locks": 1,
-        "region_locks": 0,
         "dexsanity": 1,
         "starter_region": 1,   # Kanto
         "starter_pokemon": 2,  # Charmander → Fire Type Key pre-collected
@@ -84,8 +99,8 @@ class TestRegionPassRules(WorldTestBase):
     """Kanto + Johto, dexsanity + region_locks on, starting from Kanto."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto", "Johto"},
-        "type_locks": 0,
         "region_locks": 1,
         "dexsanity": 1,
         "starter_region": 1,  # Kanto
@@ -128,6 +143,7 @@ class TestMilestoneRules(WorldTestBase):
     """Kanto only, all locks on — milestone rules should require accessible Pokemon."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "type_locks": 1,
         "region_locks": 1,
@@ -161,6 +177,7 @@ class TestVictoryRule(WorldTestBase):
     """Kanto only, all locks on — victory requires goal_count Pokemon accessible."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "type_locks": 1,
         "region_locks": 1,
@@ -187,10 +204,9 @@ class TestLegendaryLocks(WorldTestBase):
     """Kanto with legendary_locks on — box legendaries require 7 Gym Badges."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "legendary_locks": 1,
-        "type_locks": 0,
-        "region_locks": 0,
         "dexsanity": 1,
     }
 
@@ -221,10 +237,9 @@ class TestTradeLocks(WorldTestBase):
     """Kanto with trade_locks on — trade evolutions require Link Cable."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "trade_locks": 1,
-        "type_locks": 0,
-        "region_locks": 0,
         "dexsanity": 1,
     }
 
@@ -253,10 +268,9 @@ class TestFossilLocks(WorldTestBase):
     """Kanto with fossil_locks on — fossil Pokemon require Fossil Restorer."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Kanto"},
         "fossil_locks": 1,
-        "type_locks": 0,
-        "region_locks": 0,
         "dexsanity": 1,
     }
 
@@ -285,10 +299,9 @@ class TestUltraBeastLocks(WorldTestBase):
     """Alola with ultra_beast_locks on — Ultra Beasts require Ultra Wormhole."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Alola"},
         "ultra_beast_locks": 1,
-        "type_locks": 0,
-        "region_locks": 0,
         "dexsanity": 1,
     }
 
@@ -317,10 +330,9 @@ class TestParadoxLocks(WorldTestBase):
     """Paldea with paradox_locks on — Paradox Pokemon require Time Rift."""
     game = "Pokepelago"
     options = {
+        **_BASE,
         "regions": {"Paldea"},
         "paradox_locks": 1,
-        "type_locks": 0,
-        "region_locks": 0,
         "dexsanity": 1,
     }
 
