@@ -8,7 +8,7 @@ from .Items import PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FIL
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
                         TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS)
 from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
-from .data import (POKEMON_DATA, GAME_REGIONS, REGION_RANGES, STARTERS_BY_REGION, get_pokemon_region,
+from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, STARTERS_BY_REGION, get_pokemon_region,
                    LEGENDARY_SUB_IDS, LEGENDARY_BOX_IDS, LEGENDARY_MYTHIC_IDS,
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
                    STONE_EVO_GROUPS)
@@ -55,18 +55,35 @@ class PokepelagoWorld(World):
 
         # Build list of active regions in canonical order
         rrc = self.options.random_region_count.value
+        use_gen_grouping = self.options.group_hisui_galar.value and rrc != 0
         if rrc == -1:  # "random" — random count + random selection
-            count = self.random.randint(1, len(GAME_REGIONS))
-            self.active_regions = sorted(
-                self.random.sample(list(GAME_REGIONS), count),
-                key=GAME_REGIONS.index
-            )
+            if use_gen_grouping:
+                count = self.random.randint(1, len(GAME_GENERATIONS))
+                selected_gens = self.random.sample(GAME_GENERATIONS, count)
+                self.active_regions = sorted(
+                    [r for gen in selected_gens for r in gen],
+                    key=GAME_REGIONS.index
+                )
+            else:
+                count = self.random.randint(1, len(GAME_REGIONS))
+                self.active_regions = sorted(
+                    self.random.sample(list(GAME_REGIONS), count),
+                    key=GAME_REGIONS.index
+                )
         elif rrc > 0:  # 1-10 — specific count, random selection
-            count = min(rrc, len(GAME_REGIONS))
-            self.active_regions = sorted(
-                self.random.sample(list(GAME_REGIONS), count),
-                key=GAME_REGIONS.index
-            )
+            if use_gen_grouping:
+                count = min(rrc, len(GAME_GENERATIONS))
+                selected_gens = self.random.sample(GAME_GENERATIONS, count)
+                self.active_regions = sorted(
+                    [r for gen in selected_gens for r in gen],
+                    key=GAME_REGIONS.index
+                )
+            else:
+                count = min(rrc, len(GAME_REGIONS))
+                self.active_regions = sorted(
+                    self.random.sample(list(GAME_REGIONS), count),
+                    key=GAME_REGIONS.index
+                )
         else:  # 0 / "disabled" — use manual Regions option
             self.active_regions = [
                 r for r in GAME_REGIONS if r in self.options.regions.value

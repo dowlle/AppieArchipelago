@@ -47,13 +47,24 @@ class Regions(OptionSet):
 class RandomRegionCount(NamedRange):
     """Override the Regions option with a random selection.
     Set to 0 (or disabled) to use the manual Regions list.
-    Set to 1-10 to randomly pick that many regions.
-    Set to random to also randomize how many regions are picked."""
+    Set to 1-10 to randomly pick that many regions (or generations if grouping is on).
+    Set to random to also randomize how many are picked.
+    When 'Group Hisui & Galar' is enabled, this picks from 9 generation units
+    (Gen 8 = Galar + Hisui together) instead of 10 individual regions."""
     display_name = "Random Region Count"
     range_start = 0
     range_end = 10
     special_range_names = {"disabled": 0, "random": -1}
     default = 0
+
+
+class GroupHisuiGalar(Toggle):
+    """When enabled, Galar and Hisui are treated as a single 'Gen 8' unit
+    for random region selection. Picking Gen 8 always includes both regions.
+    When disabled, Galar and Hisui are independent picks.
+    Only affects random_region_count; the manual Regions list is unaffected."""
+    display_name = "Group Hisui & Galar"
+    default = 1
 
 
 class GoalType(Choice):
@@ -318,6 +329,7 @@ class PokepelagoOptions(PerGameCommonOptions):
     region_locks: RegionLocks
     regions: Regions
     random_region_count: RandomRegionCount
+    group_hisui_galar: GroupHisuiGalar
     starter_region: StarterRegion
     starter_pokemon: StarterPokemon
     starting_location_count: StartingLocationCount
@@ -351,7 +363,7 @@ class PokepelagoOptions(PerGameCommonOptions):
 
 
 pokepelago_option_groups: list[OptionGroup] = [
-    OptionGroup("Regions", [Regions, RandomRegionCount, RegionLocks, StarterRegion, StarterPokemon]),
+    OptionGroup("Regions", [Regions, RandomRegionCount, GroupHisuiGalar, RegionLocks, StarterRegion, StarterPokemon]),
     OptionGroup("Lock Gates", [EnableTypeLocks, LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
     OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),

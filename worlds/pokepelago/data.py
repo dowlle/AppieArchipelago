@@ -1040,6 +1040,20 @@ GAME_REGIONS = [
     "Kalos", "Alola", "Galar", "Hisui", "Paldea"
 ]
 
+# Generation-based grouping (Gen 8 = Galar + Hisui as a single unit).
+# Used by random_region_count when group_hisui_galar is enabled.
+GAME_GENERATIONS: list[list[str]] = [
+    ["Kanto"],             # Gen 1
+    ["Johto"],             # Gen 2
+    ["Hoenn"],             # Gen 3
+    ["Sinnoh"],            # Gen 4
+    ["Unova"],             # Gen 5
+    ["Kalos"],             # Gen 6
+    ["Alola"],             # Gen 7
+    ["Galar", "Hisui"],    # Gen 8
+    ["Paldea"],            # Gen 9
+]
+
 # Inclusive Pokedex ID ranges for each region
 REGION_RANGES = {
     "Kanto": (1, 151),

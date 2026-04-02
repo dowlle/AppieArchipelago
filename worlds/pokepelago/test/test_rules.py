@@ -345,5 +345,83 @@ class TestParadoxLocks(WorldTestBase):
         )
 
 
+# ---------------------------------------------------------------------------
+# Generation grouping (Galar + Hisui)
+# ---------------------------------------------------------------------------
+
+class TestGenerationGroupingEnabled(WorldTestBase):
+    """random_region_count=1 with group_hisui_galar ON.
+    When Gen 8 is selected, both Galar and Hisui must be active."""
+    game = "Pokepelago"
+    options = {
+        "random_region_count": 1,
+        "group_hisui_galar": 1,
+        "dexsanity": 0,
+    }
+
+    def test_galar_hisui_always_paired(self):
+        """If Galar is in active_regions, Hisui must be too (and vice versa)."""
+        world: PokepelagoWorld = self.multiworld.worlds[self.player]
+        if "Galar" in world.active_regions:
+            self.assertIn("Hisui", world.active_regions,
+                          "Galar selected without Hisui when grouping is ON")
+        if "Hisui" in world.active_regions:
+            self.assertIn("Galar", world.active_regions,
+                          "Hisui selected without Galar when grouping is ON")
+
+
+class TestGenerationGroupingDisabled(WorldTestBase):
+    """random_region_count=10 with group_hisui_galar OFF.
+    All 10 individual regions can be selected."""
+    game = "Pokepelago"
+    options = {
+        "random_region_count": 10,
+        "group_hisui_galar": 0,
+        "dexsanity": 0,
+    }
+
+    def test_all_10_regions_selected(self):
+        """With count=10 and grouping OFF, all 10 individual regions are active."""
+        world: PokepelagoWorld = self.multiworld.worlds[self.player]
+        self.assertEqual(len(world.active_regions), 10,
+                         "Expected all 10 regions when count=10 and grouping OFF")
+
+
+class TestGenerationGroupingMaxCount(WorldTestBase):
+    """random_region_count=9 with group_hisui_galar ON.
+    All 9 generations selected = all 10 regions active."""
+    game = "Pokepelago"
+    options = {
+        "random_region_count": 9,
+        "group_hisui_galar": 1,
+        "dexsanity": 0,
+    }
+
+    def test_all_generations_yields_all_regions(self):
+        """Picking all 9 generations with grouping ON gives all 10 regions."""
+        world: PokepelagoWorld = self.multiworld.worlds[self.player]
+        self.assertEqual(len(world.active_regions), 10,
+                         "Expected all 10 regions when all 9 generations are selected")
+
+
+class TestManualRegionsUnaffectedByGrouping(WorldTestBase):
+    """Manual regions list with group_hisui_galar ON.
+    Grouping should NOT affect manual region selection."""
+    game = "Pokepelago"
+    options = {
+        "regions": {"Galar"},
+        "random_region_count": 0,  # disabled = manual mode
+        "group_hisui_galar": 1,
+        "dexsanity": 0,
+    }
+
+    def test_manual_galar_without_hisui(self):
+        """Manual regions: [Galar] should NOT auto-include Hisui even with grouping ON."""
+        world: PokepelagoWorld = self.multiworld.worlds[self.player]
+        self.assertIn("Galar", world.active_regions)
+        self.assertNotIn("Hisui", world.active_regions,
+                         "Hisui should not be auto-added to manual region selection")
+
+
 if __name__ == "__main__":
     unittest.main()
