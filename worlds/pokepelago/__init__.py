@@ -109,7 +109,13 @@ class PokepelagoWorld(World):
             )
 
     def _select_starter(self) -> None:
-        """Choose starting region and starter Pokemon."""
+        """Choose starting region and starter Pokemon.
+
+        Supports two modes:
+        - Regional (option 0-3): pick from STARTERS_BY_REGION for the starting region
+        - Random (option 4): pick 1-3 starters from ALL active base-form Pokemon,
+          with optional weighting toward traditional lab starters
+        """
         sr_value = self.options.starter_region.value
         chosen_region = _REGION_BY_INDEX.get(sr_value)
         if sr_value == 0 or chosen_region not in self.active_regions:
@@ -117,10 +123,19 @@ class PokepelagoWorld(World):
         else:
             self.starting_region = chosen_region
 
+        idx = self.options.starter_pokemon.value
+
+        if idx == 4:  # random_starter: pick from all regional starters across active regions
+            self._select_random_starters(lab_only=True)
+            return
+        if idx == 5:  # random_any: pick from all active base-form Pokemon
+            self._select_random_starters(lab_only=False)
+            return
+
+        # Regional mode: pick from STARTERS_BY_REGION
         starter_list = STARTERS_BY_REGION.get(self.starting_region, [])
         if starter_list:
-            idx = self.options.starter_pokemon.value
-            if idx == 0:  # any = random
+            if idx == 0:  # any = random from region starters
                 chosen = self.random.choice(starter_list)
             else:
                 chosen = starter_list[min(idx - 1, len(starter_list) - 1)]
@@ -136,6 +151,67 @@ class PokepelagoWorld(World):
             else:
                 self.starter_names = set()
                 self.chosen_starter = None
+
+    def _select_random_starters(self, lab_only: bool = False) -> None:
+        """Pick 1-3 random starters.
+
+        lab_only=True: pick from regional starters across all active regions.
+        lab_only=False: pick from ALL active base-form Pokemon with routes.
+        """
+        active_ids = set(self._iter_active_ids())
+
+        # Build candidate pool
+        candidates: list[dict] = []
+        lab_pokemon_names: set[str] = set()
+        for region in self.active_regions:
+            for name in STARTERS_BY_REGION.get(region, []):
+                lab_pokemon_names.add(name.lower())
+
+        if lab_only:
+            # Only regional starters from active regions
+            for mon in POKEMON_DATA:
+                if mon["id"] not in active_ids:
+                    continue
+                if mon["name"].lower() in lab_pokemon_names:
+                    candidates.append(mon)
+        else:
+            # All active base-form Pokemon with routes
+            for mon in POKEMON_DATA:
+                if mon["id"] not in active_ids:
+                    continue
+                base = FAMILY_BASE.get(mon["id"], mon["id"])
+                if base != mon["id"]:
+                    continue
+                if mon["id"] not in POKEMON_ROUTES:
+                    continue
+                candidates.append(mon)
+
+        if not candidates:
+            self.starter_names = set()
+            self.chosen_starter = None
+            return
+
+        count = min(self.options.starter_count.value, len(candidates))
+
+        # Weight selection: prefer lab starters if option is on
+        if self.options.prefer_lab_starters.value:
+            weights = [5.0 if mon["name"].lower() in lab_pokemon_names else 1.0 for mon in candidates]
+        else:
+            weights = [1.0] * len(candidates)
+
+        # Weighted sampling without replacement
+        chosen: list[dict] = []
+        remaining = list(zip(candidates, weights))
+        for _ in range(count):
+            if not remaining:
+                break
+            cands, wgts = zip(*remaining)
+            picked = self.random.choices(list(cands), weights=list(wgts), k=1)[0]
+            chosen.append(picked)
+            remaining = [(c, w) for c, w in remaining if c["id"] != picked["id"]]
+
+        self.starter_names = {mon["name"] for mon in chosen}
+        self.chosen_starter = chosen[0]["name"] if chosen else None
 
     def _compute_goal_count(self) -> None:
         """Compute how many Pokemon the player needs to catch for victory."""
@@ -687,6 +763,7 @@ class PokepelagoWorld(World):
             "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
+            "starting_starters": list(self.starter_names),
             "random_region_count": int(o.random_region_count.value),
             "type_milestones": self._created_type_milestones,
         }
@@ -725,7 +802,13 @@ class PokepelagoWorld(World):
         self.starting_region = passthrough["starting_region"]
         self.goal_count = passthrough["goal_count"]
         self.chosen_starter = passthrough.get("starting_starter")
-        self.starter_names = {self.chosen_starter} if self.chosen_starter else set()
+        starters_list = passthrough.get("starting_starters")
+        if starters_list:
+            self.starter_names = set(starters_list)
+        elif self.chosen_starter:
+            self.starter_names = {self.chosen_starter}
+        else:
+            self.starter_names = set()
 
         # Rebuild all derived state from restored regions (shared with generate_early)
         self._rebuild_derived_state()

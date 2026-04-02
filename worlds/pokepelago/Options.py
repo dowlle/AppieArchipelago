@@ -173,18 +173,39 @@ class StarterRegion(Choice):
 
 
 class StarterPokemon(Choice):
-    """Which starter Pokemon to begin with in the chosen region.
-    'any': a random starter from the region's list is chosen each seed.
-    'first'/'second'/'third': by position in the region's list.
-    Kanto: first=Bulbasaur, second=Charmander, third=Squirtle.
-    Johto: first=Chikorita, second=Cyndaquil, third=Totodile. Etc.
-    Regions with no starters (Hisui) are unaffected."""
+    """Which starter Pokemon to begin with.
+    'any': a random starter from the starting region's list.
+    'first'/'second'/'third': by position in the starting region's list.
+    'random_starter': picks randomly from ALL regional starters across active regions.
+    'random_any': picks from ALL active base-form Pokemon (fully random).
+    Starter Count controls how many starters are chosen (1-3) for random modes."""
     display_name = "Starter Pokemon"
     option_any    = 0
     option_first  = 1
     option_second = 2
     option_third  = 3
+    option_random_starter = 4
+    option_random_any = 5
     default = 0
+
+
+class StarterCount(Range):
+    """How many starter Pokemon to begin with (1-3).
+    Each starter pre-collects its Type Keys, Route Key, and Line Unlock.
+    More starters = more open early game with wider type/route/line coverage.
+    Only used when Starter Pokemon is set to 'random'."""
+    display_name = "Starter Count"
+    range_start = 1
+    range_end = 3
+    default = 1
+
+
+class PreferLabStarters(Toggle):
+    """When Starter Pokemon is 'random', prefer traditional starters
+    (Bulbasaur, Charmander, Squirtle, Chikorita, etc.) over wild Pokemon.
+    Gives a 5x weight to Professor's Lab Pokemon in the random selection."""
+    display_name = "Prefer Lab Starters"
+    default = 1
 
 
 class RouteLocks(Toggle):
@@ -360,6 +381,8 @@ class PokepelagoOptions(PerGameCommonOptions):
     group_hisui_galar: GroupHisuiGalar
     starter_region: StarterRegion
     starter_pokemon: StarterPokemon
+    starter_count: StarterCount
+    prefer_lab_starters: PreferLabStarters
     starting_location_count: StartingLocationCount
     route_locks_enabled: RouteLocks
     line_locks: LineLocks
@@ -394,7 +417,7 @@ class PokepelagoOptions(PerGameCommonOptions):
 
 
 pokepelago_option_groups: list[OptionGroup] = [
-    OptionGroup("Regions", [Regions, RandomRegionCount, GroupHisuiGalar, RegionLocks, StarterRegion, StarterPokemon]),
+    OptionGroup("Regions", [Regions, RandomRegionCount, GroupHisuiGalar, RegionLocks, StarterRegion, StarterPokemon, StarterCount, PreferLabStarters]),
     OptionGroup("Lock Gates", [EnableTypeLocks, RouteLocks, LineLocks, BadgeLevelGating,
                                LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
