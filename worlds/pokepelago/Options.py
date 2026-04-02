@@ -212,7 +212,7 @@ class RouteLocks(Toggle):
     """Require Route Key items to access Pokemon on specific routes.
     Each route in the active regions adds a Route Key to the item pool.
     A Pokemon is accessible if you have ANY Route Key for a route it appears on.
-    Greatly increases progression item count and reduces filler."""
+    Forces Dexsanity ON (needed for enough locations to hold all Route Keys)."""
     display_name = "Route Locks"
     default = 0
 

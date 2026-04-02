@@ -62,8 +62,8 @@ class PokepelagoWorld(World):
         if legacy_regions:
             o.regions.value = o.regions.value | legacy_regions
 
-        # Line locks require dexsanity (not enough locations without per-Pokemon checks)
-        if o.line_locks.value and not o.dexsanity.value:
+        # Route/line locks require dexsanity (not enough milestone locations to hold all keys)
+        if (o.route_locks_enabled.value or o.line_locks.value) and not o.dexsanity.value:
             o.dexsanity.value = 1
 
         self._select_active_regions()
