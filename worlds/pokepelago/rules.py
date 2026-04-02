@@ -39,10 +39,15 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
             groups = world._type_milestone_req_groups.get(self.group_key, [])
 
         # Convert to a hashable tuple-of-tuples for the frozen Resolved dataclass.
-        # Original: (region_req: str|None, type_reqs: frozenset, extra_reqs: frozenset, count: int)
+        # Format: (region_req, type_reqs, extra_reqs, route_reqs, line_req, count)
         frozen_groups = tuple(
-            (rr, tuple(sorted(tr)) if tr else (), tuple(sorted(er)) if er else (), c)
-            for rr, tr, er, c in groups
+            (rr,
+             tuple(sorted(tr)) if tr else (),
+             tuple(sorted(er)) if er else (),
+             tuple(sorted(rtr)) if rtr else (),
+             lr,
+             c)
+            for rr, tr, er, rtr, lr, c in groups
         )
 
         return self.Resolved(
@@ -55,7 +60,7 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
     class Resolved(Rule.Resolved):
         target_count: int
         req_groups: tuple
-        """Tuple of (region_req, type_reqs_tuple, extra_reqs_tuple, count) buckets."""
+        """Tuple of (region_req, type_reqs, extra_reqs, route_reqs, line_req, count) buckets."""
 
         force_recalculate: ClassVar[bool] = True
         """Milestone rules depend on aggregate item state — always re-evaluate."""
@@ -64,7 +69,7 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
         def _evaluate(self, state: CollectionState) -> bool:
             accessible = 0
             prog = state.prog_items[self.player]
-            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+            for region_req, type_reqs, extra_reqs, route_reqs, line_req, count in self.req_groups:
                 if region_req and prog[region_req] < 1:
                     continue
                 if type_reqs:
@@ -73,6 +78,11 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
                 if extra_reqs:
                     if any(prog[item] < n for item, n in extra_reqs):
                         continue
+                if route_reqs:
+                    if not any(prog[rk] >= 1 for rk in route_reqs):
+                        continue
+                if line_req and prog[line_req] < 1:
+                    continue
                 accessible += count
                 if accessible >= self.target_count:
                     return True
@@ -82,13 +92,17 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
         def item_dependencies(self) -> dict[str, set[int]]:
             items: dict[str, set[int]] = {}
             self_id = {id(self)}
-            for region_req, type_reqs, extra_reqs, _ in self.req_groups:
+            for region_req, type_reqs, extra_reqs, route_reqs, line_req, _ in self.req_groups:
                 if region_req:
                     items.setdefault(region_req, set()).update(self_id)
                 for tk in type_reqs:
                     items.setdefault(tk, set()).update(self_id)
                 for item, _ in extra_reqs:
                     items.setdefault(item, set()).update(self_id)
+                for rk in route_reqs:
+                    items.setdefault(rk, set()).update(self_id)
+                if line_req:
+                    items.setdefault(line_req, set()).update(self_id)
             return items
 
         @override
@@ -97,12 +111,16 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
                 return f"Need {self.target_count} accessible Pokemon"
             accessible = 0
             prog = state.prog_items[self.player]
-            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+            for region_req, type_reqs, extra_reqs, route_reqs, line_req, count in self.req_groups:
                 if region_req and prog[region_req] < 1:
                     continue
                 if type_reqs and any(prog[tk] < 1 for tk in type_reqs):
                     continue
                 if extra_reqs and any(prog[item] < n for item, n in extra_reqs):
+                    continue
+                if route_reqs and not any(prog[rk] >= 1 for rk in route_reqs):
+                    continue
+                if line_req and prog[line_req] < 1:
                     continue
                 accessible += count
             met = accessible >= self.target_count
@@ -116,12 +134,16 @@ class CanAccessNPokemon(Rule["PokepelagoWorld"], game="Pokepelago"):
 
             accessible = 0
             prog = state.prog_items[self.player]
-            for region_req, type_reqs, extra_reqs, count in self.req_groups:
+            for region_req, type_reqs, extra_reqs, route_reqs, line_req, count in self.req_groups:
                 if region_req and prog[region_req] < 1:
                     continue
                 if type_reqs and any(prog[tk] < 1 for tk in type_reqs):
                     continue
                 if extra_reqs and any(prog[item] < n for item, n in extra_reqs):
+                    continue
+                if route_reqs and not any(prog[rk] >= 1 for rk in route_reqs):
+                    continue
+                if line_req and prog[line_req] < 1:
                     continue
                 accessible += count
 

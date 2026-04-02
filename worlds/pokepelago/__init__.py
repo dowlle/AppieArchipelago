@@ -2,7 +2,7 @@ from collections import Counter
 from typing import Any
 
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial
-from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
+from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny, CanReachLocation
 from worlds.AutoWorld import World, WebWorld
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
                     ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES)
@@ -226,6 +226,9 @@ class PokepelagoWorld(World):
         region_locks = bool(self.options.region_locks.value)
         type_locks = bool(self.options.type_locks.value)
 
+        route_locks_on = bool(self.options.route_locks_enabled.value)
+        line_locks_on = bool(self.options.line_locks.value)
+
         global_req_counter: Counter = Counter()
         type_req_counters: dict[str, Counter] = {t: Counter() for t in GEN_1_TYPES}
 
@@ -235,17 +238,30 @@ class PokepelagoWorld(World):
             type_reqs = frozenset(f"{t} Type Key" for t in mon["types"]) if type_locks else frozenset()
             extra_reqs = self._extra_reqs(mon["id"])
 
-            key = (region_req, type_reqs, extra_reqs)
+            # Route locks: need ANY of the Pokemon's route key items (OR logic)
+            route_reqs: frozenset = frozenset()
+            if route_locks_on:
+                items = self._pokemon_route_items.get(mon["id"], [])
+                if items:
+                    route_reqs = frozenset(items)
+
+            # Line locks: need the family's Line Unlock item
+            line_req: str | None = None
+            if line_locks_on:
+                base_id = FAMILY_BASE.get(mon["id"], mon["id"])
+                line_req = self._active_lines.get(base_id)
+
+            key = (region_req, type_reqs, extra_reqs, route_reqs, line_req)
             global_req_counter[key] += 1
             for t in mon["types"]:
                 if t in type_req_counters:
                     type_req_counters[t][key] += 1
 
         self._milestone_req_groups = [
-            (rr, tr, er, c) for (rr, tr, er), c in global_req_counter.items()
+            (rr, tr, er, rtr, lr, c) for (rr, tr, er, rtr, lr), c in global_req_counter.items()
         ]
         self._type_milestone_req_groups: dict[str, list] = {
-            t: [(rr, tr, er, c) for (rr, tr, er), c in counter.items()]
+            t: [(rr, tr, er, rtr, lr, c) for (rr, tr, er, rtr, lr), c in counter.items()]
             for t, counter in type_req_counters.items()
         }
         self._active_type_counts: dict[str, int] = {
@@ -350,6 +366,28 @@ class PokepelagoWorld(World):
         for p_type in sorted(starter_types):
             self.multiworld.push_precollected(self.create_item(f"{p_type} Type Key"))
 
+        # Pre-collect starter's Route Key and Line Unlock so it's guessable from the start
+        starter_precollected_routes: set[str] = set()
+        starter_precollected_lines: set[int] = set()
+        for name in self.starter_names:
+            mon = self._mon_lookup.get(name)
+            if not mon:
+                continue
+            mid = mon["id"]
+            # Route key: pre-collect one route key for any route the starter appears on
+            if self.options.route_locks_enabled.value:
+                route_items = self._pokemon_route_items.get(mid, [])
+                if route_items:
+                    self.multiworld.push_precollected(self.create_item(route_items[0]))
+                    starter_precollected_routes.add(route_items[0])
+            # Line unlock: pre-collect the starter's family line
+            if self.options.line_locks.value:
+                base_id = FAMILY_BASE.get(mid, mid)
+                line_item = self._active_lines.get(base_id)
+                if line_item:
+                    self.multiworld.push_precollected(self.create_item(line_item))
+                    starter_precollected_lines.add(base_id)
+
         # Non-starter Type Keys as progression items
         if self.options.type_locks.value:
             for p_type in GEN_1_TYPES:
@@ -366,18 +404,20 @@ class PokepelagoWorld(World):
 
         o = self.options
 
-        # Route Key items (one per active route)
+        # Route Key items (one per active route, minus starter's pre-collected key)
         if o.route_locks_enabled.value:
             for route_key, item_name in sorted(self._active_routes.items()):
-                self.multiworld.itempool.append(self.create_item(item_name))
-                my_items_in_pool += 1
+                if item_name not in starter_precollected_routes:
+                    self.multiworld.itempool.append(self.create_item(item_name))
+                    my_items_in_pool += 1
 
-        # Line Unlock items (one per active evolution family)
+        # Line Unlock items (one per active evolution family, minus starter's pre-collected line)
         # Line locks force dexsanity ON in generate_early(), so locations are sufficient
         if o.line_locks.value:
             for base_id, item_name in sorted(self._active_lines.items()):
-                self.multiworld.itempool.append(self.create_item(item_name))
-                my_items_in_pool += 1
+                if base_id not in starter_precollected_lines:
+                    self.multiworld.itempool.append(self.create_item(item_name))
+                    my_items_in_pool += 1
 
         # Gym Badges: added if legendary_locks OR badge_level_gating is on
         has_badge_need = (
@@ -579,19 +619,22 @@ class PokepelagoWorld(World):
                     loc = self.multiworld.get_location(f"Guess {mon['name']}", player)
                     self.set_rule(loc, rule)
 
-        # Route completion milestone rules: require the route key + enough Pokemon accessible
+        # Route completion milestone rules: require the route key + ALL Pokemon on route guessable
         if self.options.route_locks_enabled.value:
+            active_id_set = {m["id"] for m in self.active_pokemon}
+            name_by_id = {m["id"]: m["name"] for m in self.active_pokemon}
             for route_key, item_name in self._active_routes.items():
                 loc_name = ROUTE_MILESTONE_NAMES.get(route_key)
                 if not loc_name:
                     continue
                 loc = self.multiworld.get_location(loc_name, player)
-                route_pokemon_count = len([
-                    pid for pid in ROUTE_DATA[route_key]["pokemon"]
-                    if pid in {m["id"] for m in self.active_pokemon}
-                ])
-                # Require the route key AND enough total Pokemon accessible to have cleared this route
-                rule = Has(item_name) & CanAccessNPokemon(route_pokemon_count)
+                # Build rule: Has(route_key) AND CanReachLocation("Guess X") for each Pokemon on route
+                route_pokemon = [pid for pid in ROUTE_DATA[route_key]["pokemon"] if pid in active_id_set]
+                rule = Has(item_name)
+                for pid in route_pokemon:
+                    mon_name = name_by_id.get(pid)
+                    if mon_name:
+                        rule = rule & CanReachLocation(f"Guess {mon_name}")
                 self.set_rule(loc, rule)
 
         # Global milestone access rules

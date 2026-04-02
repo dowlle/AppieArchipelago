@@ -527,11 +527,11 @@ def add_virtual_routes(
                 base = family_base.get(mon["id"], mon["id"])
                 family = families.get(base, frozenset([mon["id"]]))
                 region_starter_ids.update(family)
-        # Only include family members that don't already have routes
-        orphaned = {pid for pid in region_starter_ids if pid not in pokemon_routes}
-        if orphaned:
-            _add_route(f"virtual-professors-lab-{region.lower()}", f"Professor's Lab ({region})", region, orphaned)
-            all_starter_family_ids[region] = orphaned
+        # Include ALL starter family members (starters are given in the lab,
+        # even if they also appear wild elsewhere — lab is the canonical route)
+        if region_starter_ids:
+            _add_route(f"virtual-professors-lab-{region.lower()}", f"Professor's Lab ({region})", region, region_starter_ids)
+            all_starter_family_ids[region] = region_starter_ids
 
     # ── Fossils: Fossil Lab ──
     # Only fossil evolutions that are still orphaned (base fossils may have routes)
