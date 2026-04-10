@@ -70,13 +70,32 @@ class PokepelagoWorld(World):
         self._select_active_regions()
 
         # Auto-disable line_locks when it would create too many progression items.
-        # Line locks add one progression item per evolution family (~541 for all regions).
-        # Combined with route locks + type locks + gates, this overwhelms the fill algorithm.
-        # Route groups already provide location-based gating, making line locks redundant.
-        if o.line_locks.value and o.route_locks_enabled.value:
+        # Line locks add one progression item per evolution family, which can overwhelm
+        # the fill algorithm when combined with other locks or on small region pools.
+        if o.line_locks.value:
             import logging
-            logging.warning("Pokepelago: line_locks auto-disabled (redundant with route_locks_enabled)")
-            o.line_locks.value = 0
+            # Always disable when route locks is also on (redundant gating)
+            if o.route_locks_enabled.value:
+                logging.warning("Pokepelago: line_locks auto-disabled (redundant with route_locks_enabled)")
+                o.line_locks.value = 0
+            else:
+                # Estimate progression item count vs location count.
+                # If line unlocks would push progression above 55% of locations, disable.
+                active_ids = set()
+                for region in self.active_regions:
+                    lo, hi = REGION_RANGES[region]
+                    active_ids.update(m["id"] for m in POKEMON_DATA if lo <= m["id"] <= hi)
+                n_families = len({FAMILY_BASE.get(pid, pid) for pid in active_ids})
+                n_locations = len(active_ids) + 30  # dexsanity locations + ~30 milestones
+                # Estimate other progression: ~18 type keys + ~9 region passes + ~20 gates
+                est_other_prog = 47 if len(self.active_regions) > 1 else 20
+                est_total_prog = n_families + est_other_prog
+                if est_total_prog > n_locations * 0.55:
+                    logging.warning(
+                        f"Pokepelago: line_locks auto-disabled (estimated {est_total_prog} progression "
+                        f"items vs {n_locations} locations = {est_total_prog/n_locations:.0%}, max 55%)"
+                    )
+                    o.line_locks.value = 0
 
         self._select_starter()
         self._compute_goal_count()
