@@ -549,7 +549,7 @@ class PokepelagoWorld(World):
         starter_precollected_routes: set[str] = set()
         starter_precollected_lines: set[int] = set()
         starter_precollected_regions: set[str] = set()
-        for name in self.starter_names:
+        for name in sorted(self.starter_names):
             mon = self._mon_lookup.get(name)
             if not mon:
                 continue
@@ -638,7 +638,7 @@ class PokepelagoWorld(World):
             my_items_in_pool += 1
 
         if o.stone_locks.value:
-            for stone in self._active_stones:
+            for stone in sorted(self._active_stones):
                 self.multiworld.itempool.append(self.create_item(f"{stone.title()} Stone"))
                 my_items_in_pool += 1
 
@@ -849,7 +849,7 @@ class PokepelagoWorld(World):
             "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
-            "starting_starters": list(self.starter_names),
+            "starting_starters": sorted(self.starter_names),
             "random_region_count": int(o.random_region_count.value),
             "type_milestones": self._created_type_milestones,
         }
