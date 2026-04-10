@@ -211,7 +211,7 @@ Thumbs.db
 worlds/pokepelago.apworld
 pokepelago.apworld
 package_apworld.py
-releases/pokepelago-v0.3.2.apworld
+releases/
 fuzzer/
 fuzz.py
 hooks/
@@ -222,3 +222,4 @@ worlds/pokepelago/tools/.api_cache/
 worlds/pokepelago/tools/.serebii_cache/
 worlds/pokepelago/tools/validation_report.txt
 worlds/pokepelago/tools/serebii_encounters.json
+.worktrees/
