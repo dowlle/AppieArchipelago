@@ -4137,3 +4137,71 @@ API_STONE_EVO_GROUPS: dict[str, frozenset[int]] = {
 # Total orphans: 49
 
 ORPHAN_IDS: frozenset[int] = frozenset([31, 34, 71, 182, 233, 292, 295, 317, 413, 474, 512, 514, 516, 635, 681, 683, 685, 711, 773, 790, 804, 841, 842, 851, 864, 865, 866, 867, 869, 899, 900, 901, 902, 903, 904, 923, 925, 930, 936, 937, 954, 959, 964, 979, 983, 998, 1011, 1018, 1019])
+
+
+# Route groups: group individual routes into game-area-based groups for Route Key items.
+# Each group key maps to a display name, region, and list of individual route keys from ROUTE_DATA.
+# Virtual and roaming routes are NOT grouped -- they keep individual Route Keys.
+ROUTE_GROUPS: dict[str, dict] = {
+    "alola-akala": {"display_name": "Akala Island", "region": "Alola", "routes": ["alola-route-4-area", "alola-route-5-area", "alola-route-6", "alola-route-7-area", "alola-route-8", "alola-route-8-fossil-restoration-center", "alola-route-9", "alola-route-9-police-station"]},
+    "alola-melemele": {"display_name": "Melemele Island", "region": "Alola", "routes": ["alola-route-1", "alola-route-2", "alola-route-3"]},
+    "alola-poni": {"display_name": "Poni Island", "region": "Alola", "routes": ["alola-route-16", "alola-route-17", "alola-route-17-all-areas", "alola-route-17-northeast"]},
+    "alola-ula-ula": {"display_name": "Ula'ula Island", "region": "Alola", "routes": ["alola-route-10-area", "alola-route-11-area", "alola-route-12-area", "alola-route-13-area", "alola-route-14-area", "alola-route-15", "alola-route-15-aether-house"]},
+    "alola-wilds": {"display_name": "Alola Wilds", "region": "Alola", "routes": ["alola-wilds"]},
+    "galar-crown-tundra": {"display_name": "Crown Tundra", "region": "Galar", "routes": ["galar-slipperyslope", "galar-frigidsea", "galar-frostpointfield", "galar-oldcemetery", "galar-snowslideslope", "galar-dynatreehill", "galar-tunneltothetop", "galar-pathtothepeak", "galar-crownshrine", "galar-lakesidecave"]},
+    "galar-isle-of-armor": {"display_name": "Isle of Armor", "region": "Galar", "routes": ["galar-fieldsofhonor", "galar-soothingwetlands", "galar-forestoffocus", "galar-challengebeach", "galar-challengeroad", "galar-looplagoon", "galar-traininglowlands", "galar-honeycalmisland", "galar-honeycalmsea", "galar-insularsea", "galar-workoutsea", "galar-potbottomdesert", "galar-courageouscavern"]},
+    "galar-routes-early": {"display_name": "Galar Early Routes", "region": "Galar", "routes": ["galar-route1", "galar-route2", "galar-route3", "galar-route4", "galar-slumberingweald", "galar-meetupspot"]},
+    "galar-routes-late": {"display_name": "Galar Late Routes", "region": "Galar", "routes": ["galar-route9", "galar-route10"]},
+    "galar-routes-mid": {"display_name": "Galar Mid Routes", "region": "Galar", "routes": ["galar-route5", "galar-route6", "galar-route7", "galar-route8", "galar-motostokeoutskirts", "galar-galarmine", "galar-glimwoodtangle"]},
+    "galar-wild-area-north": {"display_name": "Wild Area North", "region": "Galar", "routes": ["galar-northlakemiloch", "galar-dustybowl", "galar-bridgefield", "galar-stonywilderness", "galar-motostokeriverbank", "galar-lakeofoutrage"]},
+    "galar-wild-area-south": {"display_name": "Wild Area South", "region": "Galar", "routes": ["galar-rollingfields", "galar-dappledgrove", "galar-eastlakeaxewell", "galar-westlakeaxewell", "galar-southlakemiloch", "galar-watchtowerruins"]},
+    "hisui-alabaster": {"display_name": "Alabaster Icelands", "region": "Hisui", "routes": ["hisui-alabastericelands"]},
+    "hisui-cobalt": {"display_name": "Cobalt Coastlands", "region": "Hisui", "routes": ["hisui-cobaltcoastlands"]},
+    "hisui-coronet": {"display_name": "Coronet Highlands", "region": "Hisui", "routes": ["hisui-coronethighlands"]},
+    "hisui-crimson": {"display_name": "Crimson Mirelands", "region": "Hisui", "routes": ["hisui-crimsonmirelands"]},
+    "hisui-obsidian": {"display_name": "Obsidian Fieldlands", "region": "Hisui", "routes": ["hisui-obsidianfieldlands"]},
+    "hoenn-early": {"display_name": "Hoenn Early Routes", "region": "Hoenn", "routes": ["hoenn-route-101-area", "hoenn-route-102-area", "hoenn-route-103-area", "hoenn-route-104-area", "hoenn-route-105-area", "hoenn-route-106-area", "hoenn-route-107-area", "hoenn-route-108-area", "hoenn-route-109-area"]},
+    "hoenn-late": {"display_name": "Hoenn Late Routes", "region": "Hoenn", "routes": ["hoenn-route-119-area", "hoenn-route-119-weather-institute", "hoenn-route-120-area", "hoenn-route-121-area", "hoenn-route-122-area", "hoenn-route-123-area"]},
+    "hoenn-mid": {"display_name": "Hoenn Mid Routes", "region": "Hoenn", "routes": ["hoenn-route-110-area", "hoenn-route-111-area", "hoenn-route-112-area", "hoenn-route-113-area", "hoenn-route-114-area", "hoenn-route-115-area", "hoenn-route-116-area", "hoenn-route-117-area", "hoenn-route-118-area"]},
+    "hoenn-sea": {"display_name": "Hoenn Sea Routes", "region": "Hoenn", "routes": ["hoenn-route-124-area", "hoenn-route-124-underwater", "hoenn-route-125-area", "hoenn-route-126-area", "hoenn-route-126-underwater", "hoenn-route-127-area", "hoenn-route-128-area", "hoenn-route-129-area", "hoenn-route-130-area", "hoenn-route-131-area", "hoenn-route-132-area", "hoenn-route-133-area", "hoenn-route-134-area"]},
+    "hoenn-special": {"display_name": "Hoenn Safari & Victory Road", "region": "Hoenn", "routes": ["hoenn-safari", "hoenn-victory-road"]},
+    "hoenn-wilds": {"display_name": "Hoenn Wilds", "region": "Hoenn", "routes": ["hoenn-wilds"]},
+    "johto-early": {"display_name": "Johto Early Routes", "region": "Johto", "routes": ["johto-route-29-area", "johto-route-30-area", "johto-route-31-area", "johto-route-32-area", "johto-route-33-area"]},
+    "johto-late": {"display_name": "Johto Late Routes", "region": "Johto", "routes": ["johto-route-42-area", "johto-route-43-area", "johto-route-44-area", "johto-route-45-area", "johto-route-46-area"]},
+    "johto-mid": {"display_name": "Johto Mid Routes", "region": "Johto", "routes": ["johto-route-34-area", "johto-route-35-area", "johto-route-36-area", "johto-route-37-area", "johto-route-38-area", "johto-route-39-area"]},
+    "johto-mt-silver": {"display_name": "Mt. Silver Area", "region": "Johto", "routes": ["johto-route-47", "johto-route-47-area", "johto-route-47-inside-cave", "johto-route-48-area", "johto-sea-route-40-area", "johto-sea-route-41-area"]},
+    "johto-safari": {"display_name": "Johto Safari Zone", "region": "Johto", "routes": ["johto-safari"]},
+    "johto-wilds": {"display_name": "Johto Wilds", "region": "Johto", "routes": ["johto-wilds"]},
+    "kalos-early": {"display_name": "Kalos Early Routes", "region": "Kalos", "routes": ["kalos-route-2-area", "kalos-route-3-area", "kalos-route-4-area", "kalos-route-5-area", "kalos-route-6-area", "kalos-route-7-area"]},
+    "kalos-late": {"display_name": "Kalos Late Routes", "region": "Kalos", "routes": ["kalos-route-14-area", "kalos-route-15-area", "kalos-route-16-area", "kalos-route-17-area", "kalos-route-18-area", "kalos-route-19-area", "kalos-route-20-area", "kalos-route-21-area", "kalos-route-22-area"]},
+    "kalos-mid": {"display_name": "Kalos Mid Routes", "region": "Kalos", "routes": ["kalos-route-8-area", "kalos-route-9-area", "kalos-route-10-area", "kalos-route-11-area", "kalos-route-12-area", "kalos-route-13-area"]},
+    "kalos-wilds": {"display_name": "Kalos Wilds", "region": "Kalos", "routes": ["kalos-wilds"]},
+    "kanto-early": {"display_name": "Kanto Early Routes", "region": "Kanto", "routes": ["kanto-route-1-area", "kanto-route-2-north-towards-pewter-city", "kanto-route-2-south-towards-viridian-city", "kanto-route-3", "kanto-route-3-area", "kanto-route-4", "kanto-route-4-area"]},
+    "kanto-late": {"display_name": "Kanto Late Routes", "region": "Kanto", "routes": ["kanto-route-22-area", "kanto-route-23-area", "kanto-route-24-area", "kanto-route-25-area", "kanto-route-26-area", "kanto-route-27-area", "kanto-route-28-area", "kanto-victory-road-1", "kanto-victory-road-2"]},
+    "kanto-mid-east": {"display_name": "Kanto Mid Routes East", "region": "Kanto", "routes": ["kanto-route-5-area", "kanto-route-6-area", "kanto-route-7-area", "kanto-route-8-area", "kanto-route-9-area", "kanto-route-10-area"]},
+    "kanto-safari": {"display_name": "Kanto Safari Zone", "region": "Kanto", "routes": ["kanto-safari"]},
+    "kanto-south": {"display_name": "Kanto South Routes", "region": "Kanto", "routes": ["kanto-route-11-area", "kanto-route-12-area", "kanto-route-13-area", "kanto-route-14-area", "kanto-route-15-area"]},
+    "kanto-west": {"display_name": "Kanto West Routes", "region": "Kanto", "routes": ["kanto-route-16-area", "kanto-route-17-area", "kanto-route-18-area", "kanto-sea-route-19-area", "kanto-sea-route-20-area", "kanto-sea-route-21-area"]},
+    "kanto-wilds": {"display_name": "Kanto Wilds", "region": "Kanto", "routes": ["kanto-wilds"]},
+    "paldea-terrain": {"display_name": "Paldea Rocky Terrain", "region": "Paldea", "routes": ["paldea-mountain", "paldea-rock", "paldea-desert", "paldea-snow", "paldea-cave", "paldea-mine", "paldea-underground", "paldea-ruins"]},
+    "paldea-town": {"display_name": "Paldea Town & Wilderness", "region": "Paldea", "routes": ["paldea-town", "paldea-wilderness"]},
+    "paldea-vegetation": {"display_name": "Paldea Vegetation Zones", "region": "Paldea", "routes": ["paldea-forest", "paldea-grass", "paldea-flower", "paldea-olive", "paldea-bamboo"]},
+    "paldea-water": {"display_name": "Paldea Water Zones", "region": "Paldea", "routes": ["paldea-beach", "paldea-lake", "paldea-river", "paldea-ocean", "paldea-swamp"]},
+    "sinnoh-early": {"display_name": "Sinnoh Early Routes", "region": "Sinnoh", "routes": ["sinnoh-route-201-area", "sinnoh-route-202-area", "sinnoh-route-203-area", "sinnoh-route-204-north-towards-floaroma-town", "sinnoh-route-204-south-towards-jubilife-city", "sinnoh-route-205-east-towards-eterna-city", "sinnoh-route-205-south-towards-floaroma-town"]},
+    "sinnoh-late": {"display_name": "Sinnoh Late Routes", "region": "Sinnoh", "routes": ["sinnoh-route-212-east-towards-pastoria-city", "sinnoh-route-212-north-towards-hearthome-city", "sinnoh-route-213-area", "sinnoh-route-214-area", "sinnoh-route-215-area", "sinnoh-route-216-area", "sinnoh-route-217-area"]},
+    "sinnoh-mid": {"display_name": "Sinnoh Mid Routes", "region": "Sinnoh", "routes": ["sinnoh-route-206-area", "sinnoh-route-207-area", "sinnoh-route-208-area", "sinnoh-route-209-area", "sinnoh-route-210-south-towards-solaceon-town", "sinnoh-route-210-west-towards-celestic-town", "sinnoh-route-211-east-towards-celestic-town", "sinnoh-route-211-west-towards-eterna-city"]},
+    "sinnoh-post-game": {"display_name": "Sinnoh Post-Game Routes", "region": "Sinnoh", "routes": ["sinnoh-route-224-area", "sinnoh-route-225-area", "sinnoh-sea-route-226-area", "sinnoh-route-227-area", "sinnoh-route-228-area", "sinnoh-route-229-area", "sinnoh-sea-route-230-area"]},
+    "sinnoh-sea": {"display_name": "Sinnoh Sea & Island Routes", "region": "Sinnoh", "routes": ["sinnoh-route-218-area", "sinnoh-route-219-area", "sinnoh-sea-route-220-area", "sinnoh-route-221-area", "sinnoh-route-222-area", "sinnoh-sea-route-223-area"]},
+    "sinnoh-wilds": {"display_name": "Sinnoh Wilds", "region": "Sinnoh", "routes": ["sinnoh-wilds"]},
+    "unova-early": {"display_name": "Unova Early Routes", "region": "Unova", "routes": ["unova-route-1-area", "unova-route-2-area", "unova-route-3-area", "unova-route-4-area", "unova-route-5-area"]},
+    "unova-late": {"display_name": "Unova Late Routes", "region": "Unova", "routes": ["unova-route-11-area", "unova-route-12-area", "unova-route-13-area", "unova-route-14-area", "unova-route-15-area"]},
+    "unova-mid": {"display_name": "Unova Mid Routes", "region": "Unova", "routes": ["unova-route-6-area", "unova-route-6-weather-institute", "unova-route-7-area", "unova-route-8-area", "unova-route-9-area", "unova-route-10-area", "unova-route-10-victory-road-gate"]},
+    "unova-post-game": {"display_name": "Unova Post-Game Routes", "region": "Unova", "routes": ["unova-route-16-area", "unova-route-17-area", "unova-route-18-area", "unova-route-19-area", "unova-route-20-area", "unova-route-21-area", "unova-route-22-area", "unova-route-23-area"]},
+    "unova-wilds": {"display_name": "Unova Wilds", "region": "Unova", "routes": ["unova-wilds"]},
+}
+
+# Reverse map: route_key -> group_key (for looking up which group a route belongs to)
+ROUTE_TO_GROUP: dict[str, str] = {}
+for _gk, _ginfo in ROUTE_GROUPS.items():
+    for _rk in _ginfo["routes"]:
+        ROUTE_TO_GROUP[_rk] = _gk

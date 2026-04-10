@@ -1,6 +1,6 @@
 from BaseClasses import Item, ItemClassification
 from .data import POKEMON_DATA, GEN_1_TYPES, GAME_REGIONS
-from .route_data import ROUTE_DATA, EVOLUTION_FAMILIES
+from .route_data import ROUTE_DATA, ROUTE_GROUPS, EVOLUTION_FAMILIES
 
 # A random high number to ensure our IDs don't overlap with other games
 ITEM_ID_OFFSET = 8574000
@@ -67,16 +67,28 @@ _GATE_ITEMS = {
 }
 item_data_table.update(_GATE_ITEMS)
 
-# 7. Route Key items (Progression) — one per route in route_data.py
+# 7. Route Key items (Progression) — one per route GROUP + one per ungrouped route.
+# Grouped routes share a single key (e.g. "Melemele Island Key" covers Routes 1-3).
+# Virtual and roaming routes are not grouped and keep individual keys.
 # IDs: ITEM_ID_OFFSET + 7000 + sequential index. Filtered per-game in create_items().
 ROUTE_KEY_OFFSET = 7000
-_route_keys_sorted = sorted(ROUTE_DATA.keys())
-ROUTE_KEY_NAMES: dict[str, str] = {}  # route_key → item name
-for _i, _route_key in enumerate(_route_keys_sorted):
-    _display = ROUTE_DATA[_route_key]["display_name"]
+_grouped_route_keys = set()
+for _g in ROUTE_GROUPS.values():
+    _grouped_route_keys.update(_g["routes"])
+
+# Build combined list: groups first, then ungrouped individual routes
+ROUTE_KEY_NAMES: dict[str, str] = {}  # group_key or route_key -> item name
+_all_route_keys_sorted = sorted(ROUTE_GROUPS.keys()) + sorted(
+    rk for rk in ROUTE_DATA if rk not in _grouped_route_keys
+)
+for _i, _key in enumerate(_all_route_keys_sorted):
+    if _key in ROUTE_GROUPS:
+        _display = ROUTE_GROUPS[_key]["display_name"]
+    else:
+        _display = ROUTE_DATA[_key]["display_name"]
     _item_name = f"{_display} Key"
     item_data_table[_item_name] = (ITEM_ID_OFFSET + ROUTE_KEY_OFFSET + _i, ItemClassification.progression)
-    ROUTE_KEY_NAMES[_route_key] = _item_name
+    ROUTE_KEY_NAMES[_key] = _item_name
 
 # 8. Line Unlock items (Progression) — one per evolution family
 # IDs: ITEM_ID_OFFSET + 9000 + base_pokemon_id. Filtered per-game in create_items().

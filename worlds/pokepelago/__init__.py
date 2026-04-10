@@ -13,7 +13,8 @@ from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, 
                    LEGENDARY_SUB_IDS, LEGENDARY_BOX_IDS, LEGENDARY_MYTHIC_IDS,
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
                    STONE_EVO_GROUPS)
-from .route_data import ROUTE_DATA, POKEMON_ROUTES, FAMILY_BASE, BADGE_LEVEL_THRESHOLDS
+from .route_data import (ROUTE_DATA, ROUTE_GROUPS, ROUTE_TO_GROUP, POKEMON_ROUTES,
+                         FAMILY_BASE, BADGE_LEVEL_THRESHOLDS)
 from .rules import CanAccessNPokemon
 
 # Derive from GAME_REGIONS so it stays in sync automatically
@@ -265,15 +266,33 @@ class PokepelagoWorld(World):
             stone: active_ids & ids for stone, ids in STONE_EVO_GROUPS.items() if active_ids & ids
         }
 
-        # Route locks: active routes are those whose region matches an active region
-        # and that contain at least one active Pokemon
-        self._active_routes: dict[str, str] = {}  # route_key → item_name
+        # Route locks: build active route keys using ROUTE_GROUPS for grouped routes
+        # and individual entries for ungrouped (virtual/roaming) routes.
+        # _active_routes maps the key used in ROUTE_KEY_NAMES (group_key or route_key) → item_name
+        self._active_routes: dict[str, str] = {}  # group_key or route_key → item_name
         if self.options.route_locks_enabled.value:
             active_region_set = set(self.active_regions)
+            # Activate groups whose region matches and that contain active Pokemon
+            for group_key, group_info in ROUTE_GROUPS.items():
+                if group_info["region"] not in active_region_set:
+                    continue
+                # Group is active if any constituent route has an active Pokemon
+                has_active = any(
+                    pid in active_ids
+                    for rk in group_info["routes"] if rk in ROUTE_DATA
+                    for pid in ROUTE_DATA[rk]["pokemon"]
+                )
+                if has_active:
+                    item_name = ROUTE_KEY_NAMES.get(group_key)
+                    if item_name:
+                        self._active_routes[group_key] = item_name
+            # Activate ungrouped routes (virtual, roaming) individually
+            _grouped_route_keys = set(ROUTE_TO_GROUP.keys())
             for route_key, route_info in ROUTE_DATA.items():
+                if route_key in _grouped_route_keys:
+                    continue  # handled by groups above
                 if route_info["region"] not in active_region_set:
                     continue
-                # Route must contain at least one active Pokemon
                 if any(pid in active_ids for pid in route_info["pokemon"]):
                     item_name = ROUTE_KEY_NAMES.get(route_key)
                     if item_name:
@@ -290,6 +309,7 @@ class PokepelagoWorld(World):
                         self._active_lines[base_id] = item_name
 
         # Pokemon → route key item names lookup (for rule building)
+        # Maps each Pokemon to the GROUP key item(s) it needs (OR logic: any one suffices)
         self._pokemon_route_items: dict[int, list[str]] = {}
         if self.options.route_locks_enabled.value:
             for pid in active_ids:
@@ -298,9 +318,14 @@ class PokepelagoWorld(World):
                 base_id = FAMILY_BASE.get(pid, pid)
                 if not routes and base_id != pid:
                     routes = POKEMON_ROUTES.get(base_id, [])
-                items = [self._active_routes[rk] for rk in routes if rk in self._active_routes]
-                if items:
-                    self._pokemon_route_items[pid] = items
+                # Translate individual route keys to their group (or keep as-is for ungrouped)
+                item_names: set[str] = set()
+                for rk in routes:
+                    lookup_key = ROUTE_TO_GROUP.get(rk, rk)  # group_key if grouped, else route_key
+                    if lookup_key in self._active_routes:
+                        item_names.add(self._active_routes[lookup_key])
+                if item_names:
+                    self._pokemon_route_items[pid] = list(item_names)
 
         self._compute_milestone_requirements()
 
