@@ -68,6 +68,7 @@ class PokepelagoWorld(World):
             o.dexsanity.value = 1
 
         self._select_active_regions()
+        self._prune_invalid_gates()
 
         # Auto-disable line_locks when it would create too many progression items.
         # Line locks add one progression item per evolution family, which can overwhelm
@@ -132,11 +133,38 @@ class PokepelagoWorld(World):
             key=GAME_REGIONS.index
         )
 
-        # Ensure enough starting locations when lock gates are active.
-        # With starting_location_count=0 and multiple locks, sphere 0 can be too
-        # small for the fill algorithm to bootstrap the progression chain.
-        # Count active lock gates and require at least 2 starting locations per gate type.
+    def _prune_invalid_gates(self) -> None:
+        """Disable lock gates that don't apply to the active Pokemon pool.
+
+        Locks for categories with 0 matching Pokemon just waste progression item slots
+        and can cause FillErrors on small regions. Also ensures enough starting locations
+        when multiple gates are active.
+        """
         o = self.options
+        active_ids = set()
+        for region in self.active_regions:
+            lo, hi = REGION_RANGES[region]
+            active_ids.update(m["id"] for m in POKEMON_DATA if lo <= m["id"] <= hi)
+
+        # Disable category gates that have no matching active Pokemon
+        if o.ultra_beast_locks.value and not (active_ids & ULTRA_BEAST_IDS):
+            o.ultra_beast_locks.value = 0
+        if o.paradox_locks.value and not (active_ids & PARADOX_IDS):
+            o.paradox_locks.value = 0
+        if o.fossil_locks.value and not (active_ids & FOSSIL_IDS):
+            o.fossil_locks.value = 0
+        if o.trade_locks.value and not (active_ids & TRADE_EVO_IDS):
+            o.trade_locks.value = 0
+        if o.baby_locks.value and not (active_ids & BABY_IDS):
+            o.baby_locks.value = 0
+        if o.stone_locks.value and not any(active_ids & ids for ids in STONE_EVO_GROUPS.values()):
+            o.stone_locks.value = 0
+
+        # Badge gating with very few Pokemon is pointless (levels don't differentiate)
+        if o.badge_level_gating.value and len(active_ids) < 20:
+            o.badge_level_gating.value = 0
+
+        # Ensure enough starting locations when multiple gates are active
         gate_count = sum(bool(v) for v in [
             o.type_locks.value, o.region_locks.value, o.route_locks_enabled.value,
             o.line_locks.value, o.badge_level_gating.value, o.legendary_locks.value,
@@ -144,7 +172,7 @@ class PokepelagoWorld(World):
             o.ultra_beast_locks.value, o.paradox_locks.value, o.stone_locks.value,
         ])
         if gate_count >= 2:
-            min_starts = min(gate_count, 8)  # cap at the option's max
+            min_starts = min(gate_count, 8)
             o.starting_location_count.value = max(o.starting_location_count.value, min_starts)
 
     def _select_starter(self) -> None:
