@@ -132,11 +132,20 @@ class PokepelagoWorld(World):
             key=GAME_REGIONS.index
         )
 
-        # Hisui-only: force starting locations to ensure enough ungated slots.
-        if self.active_regions == ["Hisui"]:
-            self.options.starting_location_count.value = max(
-                self.options.starting_location_count.value, 5
-            )
+        # Ensure enough starting locations when lock gates are active.
+        # With starting_location_count=0 and multiple locks, sphere 0 can be too
+        # small for the fill algorithm to bootstrap the progression chain.
+        # Count active lock gates and require at least 2 starting locations per gate type.
+        o = self.options
+        gate_count = sum(bool(v) for v in [
+            o.type_locks.value, o.region_locks.value, o.route_locks_enabled.value,
+            o.line_locks.value, o.badge_level_gating.value, o.legendary_locks.value,
+            o.trade_locks.value, o.baby_locks.value, o.fossil_locks.value,
+            o.ultra_beast_locks.value, o.paradox_locks.value, o.stone_locks.value,
+        ])
+        if gate_count >= 2:
+            min_starts = min(gate_count, 8)  # cap at the option's max
+            o.starting_location_count.value = max(o.starting_location_count.value, min_starts)
 
     def _select_starter(self) -> None:
         """Choose starting region and starter Pokemon.
