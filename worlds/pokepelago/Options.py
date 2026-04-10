@@ -228,9 +228,9 @@ class LineLocks(Toggle):
     Required for ALL members of the family (base forms and evolutions).
     Evolution-only Pokemon inherit route access from their base form.
     Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks).
-    Auto-disabled when Route Locks is also enabled (route groups already
-    provide location-based gating, and combining both creates too many
-    progression items for the fill algorithm)."""
+    Auto-disabled when Route Locks is also enabled, or when the active
+    region pool is too small for the number of progression items it
+    would create (prevents fill algorithm failures)."""
     display_name = "Line Locks"
     default = 0
 
