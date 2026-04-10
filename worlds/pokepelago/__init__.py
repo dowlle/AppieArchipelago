@@ -68,6 +68,16 @@ class PokepelagoWorld(World):
             o.dexsanity.value = 1
 
         self._select_active_regions()
+
+        # Auto-disable line_locks when it would create too many progression items.
+        # Line locks add one progression item per evolution family (~541 for all regions).
+        # Combined with route locks + type locks + gates, this overwhelms the fill algorithm.
+        # Route groups already provide location-based gating, making line locks redundant.
+        if o.line_locks.value and o.route_locks_enabled.value:
+            import logging
+            logging.warning("Pokepelago: line_locks auto-disabled (redundant with route_locks_enabled)")
+            o.line_locks.value = 0
+
         self._select_starter()
         self._compute_goal_count()
         self._rebuild_derived_state()
