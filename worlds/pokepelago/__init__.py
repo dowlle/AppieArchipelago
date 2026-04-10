@@ -325,7 +325,7 @@ class PokepelagoWorld(World):
                     if lookup_key in self._active_routes:
                         item_names.add(self._active_routes[lookup_key])
                 if item_names:
-                    self._pokemon_route_items[pid] = list(item_names)
+                    self._pokemon_route_items[pid] = sorted(item_names)
 
         self._compute_milestone_requirements()
 
