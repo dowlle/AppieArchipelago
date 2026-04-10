@@ -209,10 +209,12 @@ class PreferLabStarters(Toggle):
 
 
 class RouteLocks(Toggle):
-    """Require Route Key items to access Pokemon on specific routes.
-    Each route in the active regions adds a Route Key to the item pool.
-    A Pokemon is accessible if you have ANY Route Key for a route it appears on.
-    Forces Dexsanity ON (needed for enough locations to hold all Route Keys)."""
+    """Require Route Key items to access Pokemon by game area.
+    Routes are grouped into meaningful areas (e.g. Melemele Island, Wild Area
+    North, Hoenn Early Routes). Each area adds one Route Key to the item pool.
+    A Pokemon is accessible if you have ANY area key for a route it appears on.
+    Forces Dexsanity ON (needed for enough locations to hold all Route Keys).
+    Note: enabling this will auto-disable Line Locks if both are on."""
     display_name = "Route Locks"
     default = 0
 
@@ -222,7 +224,10 @@ class LineLocks(Toggle):
     Every active evolution family adds one Line Unlock to the item pool.
     Required for ALL members of the family (base forms and evolutions).
     Evolution-only Pokemon inherit route access from their base form.
-    Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks)."""
+    Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks).
+    Auto-disabled when Route Locks is also enabled (route groups already
+    provide location-based gating, and combining both creates too many
+    progression items for the fill algorithm)."""
     display_name = "Line Locks"
     default = 0
 
