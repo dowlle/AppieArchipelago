@@ -5,15 +5,17 @@ from .data import GAME_REGIONS
 
 class Dexsanity(Toggle):
     """If enabled, each Pokemon has its own location check ('Guess {Pokemon}').
-    The location becomes accessible once that Pokemon's region is unlocked (via Region Pass).
-    Disabling removes all per-Pokemon locations, leaving only milestone-based filler checks.
-    Disabling dramatically reduces item pool size and works well for milestone-only games."""
+    Access is gated by whichever lock options are active (Type Keys, Region Passes,
+    Route Keys, Line Unlocks, Gym Badges, etc.).
+    Disabling removes all per-Pokemon locations, leaving only milestone-based checks.
+    Automatically enabled when Route Locks or Line Locks is on."""
     display_name = "Dexsanity"
     default = 1
 
 
 class EnableTypeLocks(Toggle):
-    """If true, guessing a Pokemon requires both its specific unlock item and its elemental Type Key."""
+    """If enabled, guessing a Pokemon requires all Type Keys matching its elemental types
+    (e.g. Bulbasaur needs both Grass Type Key and Poison Type Key)."""
     display_name = "Enable Type Locks"
     default = 1
 
@@ -69,7 +71,7 @@ class GroupHisuiGalar(Toggle):
 
 class GoalType(Choice):
     """How the goal is defined.
-    Percentage: guess a percentage of the selected generation (see 'Goal Percentage').
+    Percentage: guess a percentage of the active Pokemon pool (see 'Goal Percentage').
     Count: guess a fixed number of Pokemon (see 'Goal Count')."""
     display_name = "Goal Type"
     option_percentage = 0
@@ -78,9 +80,9 @@ class GoalType(Choice):
 
 
 class GoalPercentage(Range):
-    """Percentage of the selected generation that must be guessed to complete the game.
+    """Percentage of the active Pokemon pool that must be guessed to complete the game.
     Only used when 'Goal Type' is set to 'percentage'.
-    For example, 100 means guess every Pokemon in the selected generation."""
+    For example, 80 with 386 active Pokemon means guessing 309 to win."""
     display_name = "Goal Percentage"
     range_start = 1
     range_end = 100
@@ -90,7 +92,7 @@ class GoalPercentage(Range):
 class GoalCount(Range):
     """Fixed number of Pokemon that must be guessed to complete the game.
     Only used when 'Goal Type' is set to 'count'.
-    Automatically capped to the total Pokemon available in the selected generation."""
+    Automatically capped to the total active Pokemon across selected regions."""
     display_name = "Goal Count"
     range_start = 1
     range_end = 1025
@@ -155,7 +157,7 @@ class StarterRegion(Choice):
     """Which game region your adventure starts in.
     Determines which Pokemon starters are available and which Type Keys begin pre-collected.
     'any': a random active region is chosen each seed.
-    Specific region: that region must also be active (include_X: true).
+    Specific region: must also be included in the Regions option.
     If the chosen region is not active, falls back to a random active region."""
     display_name = "Starter Region"
     option_any    = 0
@@ -191,9 +193,10 @@ class StarterPokemon(Choice):
 
 class StarterCount(Range):
     """How many starter Pokemon to begin with (1-3).
-    Each starter pre-collects its Type Keys, Route Key, and Line Unlock.
+    Each starter pre-collects its Type Keys, Route Key, Line Unlock, and
+    Region Pass (if the starter is in a non-starting region).
     More starters = more open early game with wider type/route/line coverage.
-    Only used when Starter Pokemon is set to 'random'."""
+    Only used when Starter Pokemon is set to 'random_starter' or 'random_any'."""
     display_name = "Starter Count"
     range_start = 1
     range_end = 3
@@ -293,7 +296,7 @@ class UltraBeastLocks(Toggle):
 class ParadoxLocks(Toggle):
     """Require a Time Rift item before guessing Paradox Pokemon
     (Great Tusk, Roaring Moon, Iron Valiant, etc., plus Koraidon and Miraidon).
-    Only relevant when Paldea or Galar/DLC regions are active."""
+    Only relevant when Paldea is active."""
     display_name = "Paradox Lock"
     default = 0
 
