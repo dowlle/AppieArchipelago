@@ -15,7 +15,14 @@ class Dexsanity(Toggle):
 
 class EnableTypeLocks(Toggle):
     """If enabled, guessing a Pokemon requires all Type Keys matching its elemental types
-    (e.g. Bulbasaur needs both Grass Type Key and Poison Type Key)."""
+    (e.g. Bulbasaur needs both Grass Type Key and Poison Type Key).
+
+    Generation cost: adds one progression item per active type (up to 18).
+    Pokemon of a type can only be caught with that Type Key, so most Type Keys
+    must go in non-type-gated locations (starting slots + "Guessed N" milestones
+    + dexsanity "Guess X" locations). Disabling Dexsanity removes the per-Pokemon
+    locations and can squeeze Type Key placement on small regions — see the
+    Hisui-only case in the backlog history and the Line Locks perf note below."""
     display_name = "Enable Type Locks"
     default = 1
 
@@ -235,7 +242,24 @@ class LineLocks(Toggle):
     Forces Dexsanity ON (needed for enough locations to hold all Line Unlocks).
     Auto-disabled when Route Locks is also enabled, or when the active
     region pool is too small for the number of progression items it
-    would create (prevents fill algorithm failures)."""
+    would create (prevents fill algorithm failures).
+
+    ── GENERATION PERFORMANCE ─────────────────────────────────────────────────
+    Line Locks is the single biggest cost on generation time, because it adds
+    one progression item per evolution family across every active region
+    (~50-100 per region, 300+ across many regions). Stacking Line Locks with:
+
+      - 5+ active regions, AND
+      - Type Locks + Region Locks + Badge Level Gating, AND
+      - 3+ of {legendary, trade, baby, fossil, paradox, stone, ultra_beast} locks
+
+    ...pushes the progression-item count into the 700-900 range. `fill_restrictive`
+    complexity scales with progression-items × locations, so these configs can
+    take 30-60s to generate on modest hardware (vs. <5s for typical configs).
+    The heuristic at `__init__.py:76-99` auto-disables Line Locks when the
+    estimated progression-to-location ratio exceeds 55% — this prevents
+    outright FillErrors but not slow-but-completes generation. If you want
+    all-locks-on with many regions, be prepared to wait on generation."""
     display_name = "Line Locks"
     default = 0
 

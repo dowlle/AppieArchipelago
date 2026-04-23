@@ -6,14 +6,43 @@ on:
   pull_request:
     paths: ['worlds/pokepelago/**']
 
+# We inline the composite steps from Eijebong/ap-actions/fuzz so we can pass
+# -t 60 to fuzz.py. The action's default per-seed timeout is ~15s, which GitHub
+# Actions runners occasionally blow through on heavy user configs
+# (dexsanity off + line_locks + many regions + stacked category locks =
+# 800+ item fill that takes 15-45s on CI hardware but <15s locally). Matching
+# the local run_fuzz.sh's -t 60 eliminates the resulting false-red CI runs
+# without changing any APWorld generation logic.
+# Upstream reference: https://github.com/Eijebong/ap-actions/blob/main/fuzz/action.yml
 jobs:
   fuzz:
     runs-on: ubuntu-latest
     steps:
-      - uses: Eijebong/ap-actions/fuzz@main
+      - uses: actions/checkout@master
+
+      - uses: Eijebong/ap-actions/setup-ap@main
         with:
-          ap-version: '0.6.7'
+          version: '0.6.7'
           python-version: '3.12'
+
+      - uses: Eijebong/ap-actions/copy-apworld-source@main
+        id: copy
+        with:
           apworld-path: 'worlds/pokepelago'
-          runs: 500
-          yamls-per-run: 1
+
+      - name: Get fuzzer
+        shell: bash
+        run: |
+          curl -SsL -o archipelago/fuzz.py https://raw.githubusercontent.com/Eijebong/Archipelago-fuzzer/718106c3a345e65614f147e3210a15e71ee3cfb6/fuzz.py
+
+      - name: Run fuzzer (60s per-seed timeout, matches local run_fuzz.sh)
+        shell: bash
+        run: |
+          cd archipelago && uv run python fuzz.py -j 4 -g ${{ steps.copy.outputs.apworld-name }} -r 500 -n 1 -t 60
+
+      - name: Upload fuzzer failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-output
+          path: archipelago/fuzz_output
