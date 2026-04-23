@@ -48,7 +48,7 @@ class Regions(OptionSet):
 
 class RandomRegionCount(NamedRange):
     """Override the Regions option with a random selection.
-    Set to 0 (or disabled) to use the manual Regions list.
+    Set to 0 (or disabled) to use the manual Regions list (this is the default).
     Set to 1-10 to randomly pick that many regions (or generations if grouping is on).
     Set to random to also randomize how many are picked.
     When 'Group Hisui & Galar' is enabled, this picks from 9 generation units
@@ -57,7 +57,7 @@ class RandomRegionCount(NamedRange):
     range_start = 0
     range_end = 10
     special_range_names = {"disabled": 0, "random": -1}
-    default = 3
+    default = 0
 
 
 class GroupHisuiGalar(Toggle):
