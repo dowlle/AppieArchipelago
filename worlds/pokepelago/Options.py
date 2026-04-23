@@ -217,7 +217,12 @@ class RouteLocks(Toggle):
     North, Hoenn Early Routes). Each area adds one Route Key to the item pool.
     A Pokemon is accessible if you have ANY area key for a route it appears on.
     Forces Dexsanity ON (needed for enough locations to hold all Route Keys).
-    Note: enabling this will auto-disable Line Locks if both are on."""
+    Note: enabling this will auto-disable Line Locks if both are on.
+
+    YAML key: route_locks_enabled (NOT route_locks). The dataclass attribute
+    in PokepelagoOptions uses the _enabled suffix; AP silently ignores unknown
+    keys, so a YAML with `route_locks: true` will generate with this option
+    set to its default (0) and the setting will appear to have no effect."""
     display_name = "Route Locks"
     default = 0
 
