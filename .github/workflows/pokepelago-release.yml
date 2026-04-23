@@ -16,7 +16,7 @@ jobs:
         uses: Eijebong/ap-actions/package-apworld@main
         with:
           path: worlds/pokepelago
-          ap-version: '0.6.6'
+          ap-version: '0.6.7'
           python-version: '3.12'
 
       - uses: actions/upload-artifact@v4
@@ -31,7 +31,7 @@ jobs:
         id: template
         with:
           apworld-path: worlds/pokepelago
-          ap-version: '0.6.6'
+          ap-version: '0.6.7'
           python-version: '3.12'
 
       - uses: actions/upload-artifact@v4

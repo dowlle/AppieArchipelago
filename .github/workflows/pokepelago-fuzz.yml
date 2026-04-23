@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: Eijebong/ap-actions/fuzz@main
         with:
-          ap-version: '0.6.6'
+          ap-version: '0.6.7'
           python-version: '3.12'
           apworld-path: 'worlds/pokepelago'
           runs: 500
