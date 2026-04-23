@@ -825,6 +825,7 @@ class PokepelagoWorld(World):
     def fill_slot_data(self) -> dict[str, Any]:
         o = self.options
         return {
+            "apworld_version": self.world_version.as_simple_string(),
             "type_locks": bool(o.type_locks.value),
             "region_locks": bool(o.region_locks.value),
             "route_locks": bool(o.route_locks_enabled.value),
