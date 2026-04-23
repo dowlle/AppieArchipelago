@@ -265,6 +265,39 @@ class PokepelagoWorld(World):
                     continue
                 candidates.append(mon)
 
+        # Fallback chain: if the preferred candidate pool is empty, relax constraints
+        # progressively to guarantee at least one starter when active regions contain
+        # any routed Pokemon. Without this, gated-only region sets (e.g. Hisui-only)
+        # silently yield 0 starters, which cascades into FillErrors because no Type
+        # Keys / Route Keys / Line Unlocks / Region Passes get pre-collected to
+        # bootstrap the progression chain.
+        if not candidates and lab_only:
+            # Relax 1: fall through to non-lab base-form selection
+            return self._select_random_starters(lab_only=False)
+
+        if not candidates:
+            # Relax 2: same base-form + route filter but allow gated categories
+            # (legendaries, trade evos, fossils, UBs, paradoxes, stone evos)
+            for mon in POKEMON_DATA:
+                if mon["id"] not in active_ids:
+                    continue
+                base = FAMILY_BASE.get(mon["id"], mon["id"])
+                if base != mon["id"]:
+                    continue
+                if mon["id"] not in POKEMON_ROUTES:
+                    continue
+                candidates.append(mon)
+
+        if not candidates:
+            # Relax 3: allow non-base forms (e.g. Hisui-only where every Pokemon is
+            # a regional evolution whose base form lives in a non-active region)
+            for mon in POKEMON_DATA:
+                if mon["id"] not in active_ids:
+                    continue
+                if mon["id"] not in POKEMON_ROUTES:
+                    continue
+                candidates.append(mon)
+
         if not candidates:
             self.starter_names = set()
             self.chosen_starter = None
