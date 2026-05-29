@@ -1082,12 +1082,14 @@ LEGENDARY_SUB_IDS: frozenset = frozenset([
     144, 145, 146,                                          # Kanto bird trio
     243, 244, 245,                                          # Johto beast trio
     377, 378, 379, 380, 381,                                # Hoenn regis + eon duo
-    480, 481, 482, 485, 486, 488, 489,                     # Sinnoh lake guardians + others
+    480, 481, 482, 485, 486, 488,                     # Sinnoh lake guardians + others
     638, 639, 640, 641, 642, 645,                           # Unova swords of justice + forces of nature
+    772, 773,                                              # Type: Null, Silvally (Alola synthetic legendaries)
     785, 786, 787, 788,                                     # Alola tapus
     891, 892,                                               # Galar kubfu / urshifu
     894, 895, 896, 897,                                     # Galar regis + horses
     905,                                                    # Hisui enamorus
+    1014, 1015, 1016, 1017,                                # Paldea loyal three + Ogerpon (Teal Mask)
     1001, 1002, 1003, 1004,                                 # Paldea ruinous quartet
 ])
 
@@ -1098,6 +1100,7 @@ LEGENDARY_BOX_IDS: frozenset = frozenset([
     483, 484, 487,                                          # Dialga, Palkia, Giratina
     643, 644, 646,                                          # Reshiram, Zekrom, Kyurem
     716, 717, 718,                                          # Xerneas, Yveltal, Zygarde
+    789, 790,                                              # Cosmog, Cosmoem (evolve into Solgaleo/Lunala)
     791, 792, 800,                                          # Solgaleo, Lunala, Necrozma
     888, 889, 890, 898,                                     # Zacian, Zamazenta, Eternatus, Calyrex
     1007, 1008, 1024,                                       # Koraidon, Miraidon, Terapagos
@@ -1107,6 +1110,7 @@ LEGENDARY_MYTHIC_IDS: frozenset = frozenset([
     151,                                                    # Mew
     251,                                                    # Celebi
     385, 386,                                               # Jirachi, Deoxys
+    489,                                                    # Phione (PokeAPI is_mythical; was mis-tiered as sub-legendary)
     490, 491, 492, 493,                                     # Manaphy, Darkrai, Shaymin, Arceus
     494,                                                    # Victini
     647, 648, 649,                                          # Keldeo, Meloetta, Genesect
@@ -1123,6 +1127,7 @@ BABY_IDS: frozenset = frozenset([
     236, 238, 239, 240,                                     # Tyrogue, Smoochum, Elekid, Magby
     298, 360,                                               # Azurill, Wynaut
     406, 433, 438, 439, 440, 446, 447, 458,                 # Gen 4 babies
+    848,                                                    # Toxel (Gen 8 baby)                 # Gen 4 babies
 ])
 
 # Trade-evolved Pokémon — require Link Cable
@@ -1132,6 +1137,7 @@ TRADE_EVO_IDS: frozenset = frozenset([
     367, 368,                                               # Gen 3: Huntail, Gorebyss
     464, 466, 467, 474, 477,                                # Gen 4: Rhyperior, Electivire, Magmortar, Porygon-Z, Dusknoir
     526, 534, 589, 617,                                     # Gen 5: Gigalith, Conkeldurr, Escavalier, Accelgor
+    683, 685,                                              # Gen 6: Aromatisse, Slurpuff (item trade evolutions)
     709, 711,                                               # Gen 6: Trevenant, Gourgeist
 ])
 
@@ -1149,6 +1155,7 @@ FOSSIL_IDS: frozenset = frozenset([
 ULTRA_BEAST_IDS: frozenset = frozenset([
     793, 794, 795, 796, 797, 798, 799,                      # Nihilego → Guzzlord
     800,                                                    # Necrozma
+    803, 804,                                              # Poipole, Naganadel (USUM Ultra Beasts)
     805, 806,                                               # Stakataka, Blacephalon
 ])
 
