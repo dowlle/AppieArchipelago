@@ -21,7 +21,7 @@ class EnableTypeLocks(Toggle):
     Pokemon of a type can only be caught with that Type Key, so most Type Keys
     must go in non-type-gated locations (starting slots + "Guessed N" milestones
     + dexsanity "Guess X" locations). Disabling Dexsanity removes the per-Pokemon
-    locations and can squeeze Type Key placement on small regions — see the
+    locations and can squeeze Type Key placement on small regions -- see the
     Hisui-only case in the backlog history and the Line Locks perf note below."""
     display_name = "Enable Type Locks"
     default = 1
@@ -244,7 +244,7 @@ class LineLocks(Toggle):
     region pool is too small for the number of progression items it
     would create (prevents fill algorithm failures).
 
-    ── GENERATION PERFORMANCE ─────────────────────────────────────────────────
+    -- GENERATION PERFORMANCE -------------------------------------------------
     Line Locks is the single biggest cost on generation time, because it adds
     one progression item per evolution family across every active region
     (~50-100 per region, 300+ across many regions). Stacking Line Locks with:
@@ -254,10 +254,10 @@ class LineLocks(Toggle):
       - 3+ of {legendary, trade, baby, fossil, paradox, stone, ultra_beast} locks
 
     ...pushes the progression-item count into the 700-900 range. `fill_restrictive`
-    complexity scales with progression-items × locations, so these configs can
+    complexity scales with progression-items x locations, so these configs can
     take 30-60s to generate on modest hardware (vs. <5s for typical configs).
     The heuristic at `__init__.py:76-99` auto-disables Line Locks when the
-    estimated progression-to-location ratio exceeds 55% — this prevents
+    estimated progression-to-location ratio exceeds 55% -- this prevents
     outright FillErrors but not slow-but-completes generation. If you want
     all-locks-on with many regions, be prepared to wait on generation."""
     display_name = "Line Locks"
@@ -333,7 +333,7 @@ class ParadoxLocks(Toggle):
 class StoneLocks(Toggle):
     """Require the matching evolutionary stone item before guessing stone-only evolutions.
     Each stone type that gates at least one active Pokemon adds one stone item to the pool.
-    Examples: Fire Stone → Arcanine/Ninetales/Flareon, Water Stone → Starmie/Vaporeon/Cloyster."""
+    Examples: Fire Stone -> Arcanine/Ninetales/Flareon, Water Stone -> Starmie/Vaporeon/Cloyster."""
     display_name = "Stone Evolution Lock"
     default = 1
 
@@ -345,51 +345,51 @@ class MasterBallBypassGates(Toggle):
     default = 1
 
 
-# ── Legacy backward-compat toggles (hidden from UI, consumed by generate_early) ─────
-# Old YAMLs used include_kanto/include_johto/… instead of the unified "regions" OptionSet.
+# -- Legacy backward-compat toggles (hidden from UI, consumed by generate_early) -----
+# Old YAMLs used include_kanto/include_johto/... instead of the unified "regions" OptionSet.
 class _LegacyRegionToggle(Toggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     visibility = Visibility.none  # hidden from options UI
     default = 0
 
 class IncludeKanto(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Kanto (deprecated)"
 
 class IncludeJohto(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Johto (deprecated)"
 
 class IncludeHoenn(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Hoenn (deprecated)"
 
 class IncludeSinnoh(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Sinnoh (deprecated)"
 
 class IncludeUnova(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Unova (deprecated)"
 
 class IncludeKalos(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Kalos (deprecated)"
 
 class IncludeAlola(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Alola (deprecated)"
 
 class IncludeGalar(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Galar (deprecated)"
 
 class IncludeHisui(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Hisui (deprecated)"
 
 class IncludePaldea(_LegacyRegionToggle):
-    """Deprecated — use the 'regions' option instead."""
+    """Deprecated -- use the 'regions' option instead."""
     display_name = "Include Paldea (deprecated)"
 
 _LEGACY_REGION_MAP: dict[str, str] = {
@@ -403,9 +403,29 @@ _LEGACY_REGION_MAP: dict[str, str] = {
 class IncludeShinies(Toggle):
     """Add Shiny Charm filler items to the item pool.
     Receiving a Shiny Charm makes a random Pokemon in your caught list display
-    its shiny sprite. Purely cosmetic — no gameplay effect."""
+    its shiny sprite. Purely cosmetic -- no gameplay effect."""
     display_name = "Include Shiny Charms"
     default = 1
+
+
+class PokegearPokedexFiller(Toggle):
+    """Classify Pokedex and Pokegear as filler instead of useful items.
+    They behave identically in-game (reveal a Pokemon's type/identity); this only
+    lowers their fill priority so they stop crowding the useful-item tier when you
+    end up with a large surplus. Master Ball is unaffected.
+    Off by default (Pokedex and Pokegear remain 'useful')."""
+    display_name = "Pokedex/Pokegear as Filler"
+    default = 0
+
+
+class StopAutosubmitOnGoal(Toggle):
+    """Default for the client's 'stop auto-submit after goal' toggle.
+    When on, once your goal is reached the client stops auto-submitting remaining
+    guesses. This only sets the client's initial preference -- players can still
+    override it locally. Off by default (auto-submit keeps running after goal).
+    Has no effect on generation or logic."""
+    display_name = "Stop Auto-submit After Goal"
+    default = 0
 
 
 @dataclass
@@ -433,10 +453,12 @@ class PokepelagoOptions(PerGameCommonOptions):
     paradox_locks: ParadoxLocks
     stone_locks: StoneLocks
     master_ball_bypass_gates: MasterBallBypassGates
+    pokegear_pokedex_filler: PokegearPokedexFiller
     include_shinies: IncludeShinies
     goal_type: GoalType
     goal_percentage: GoalPercentage
     goal_count: GoalCount
+    stop_autosubmit_on_goal: StopAutosubmitOnGoal
     trap_chance: TrapChance
     trap_weights: TrapWeights
     filler_weights: FillerWeights
@@ -458,5 +480,5 @@ pokepelago_option_groups: list[OptionGroup] = [
     OptionGroup("Lock Gates", [EnableTypeLocks, RouteLocks, LineLocks, BadgeLevelGating,
                                LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
-    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
+    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, StopAutosubmitOnGoal, TrapChance, TrapWeights, FillerWeights], start_collapsed=True),
 ]

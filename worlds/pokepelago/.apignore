@@ -7,6 +7,11 @@ _dev/
 # Tests (run by CI via ap-actions, not needed in .apworld)
 test/
 
+# Developer-only scripts + data sources (regenerate data files / scrape sources / perf
+# harness). Never imported at runtime — the world imports only data.py, route_data.py,
+# Items.py, Locations.py, Options.py, rules.py at the package root. FEAT-19.
+tools/
+
 # Compiled Python bytecode
 __pycache__/
 *.pyc

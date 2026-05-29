@@ -4205,3 +4205,35 @@ ROUTE_TO_GROUP: dict[str, str] = {}
 for _gk, _ginfo in ROUTE_GROUPS.items():
     for _rk in _ginfo["routes"]:
         ROUTE_TO_GROUP[_rk] = _gk
+
+
+def compute_badge_requirement(mon_id: int) -> int:
+    """Minimum gym-badge tier for a Pokemon under badge-level gating.
+
+    Pure function of encounter data, with no seed/option dependence: take the lowest
+    encounter level across the Pokemon's own routes -- falling back to its evolutionary
+    family base's routes when the Pokemon itself is never wild-encountered -- and map
+    it to a badge tier via BADGE_LEVEL_THRESHOLDS. A Pokemon with no encounter data at
+    all defaults to the highest tier (gated hardest).
+
+    This is the single source of truth shared by generation (__init__.py, which feeds
+    the access rules Universal Tracker reads) and the client data export
+    (tools/_export_client_data.py). The client must read the exported value rather than
+    recompute it, or the client and the multiworld disagree about badge gating for
+    cross-generation evolutions (BUG-17 / the BUG-12 drift class).
+    """
+    routes = POKEMON_ROUTES.get(mon_id, [])
+    base_id = FAMILY_BASE.get(mon_id, mon_id)
+    if not routes and base_id != mon_id:
+        routes = POKEMON_ROUTES.get(base_id, [])
+    min_level = 100
+    for rk in routes:
+        route_info = ROUTE_DATA.get(rk)
+        if route_info:
+            lvl = route_info["pokemon"].get(mon_id) or route_info["pokemon"].get(base_id)
+            if lvl and lvl < min_level:
+                min_level = lvl
+    for i, threshold in enumerate(BADGE_LEVEL_THRESHOLDS):
+        if min_level <= threshold:
+            return i
+    return len(BADGE_LEVEL_THRESHOLDS)

@@ -5,7 +5,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from worlds.pokepelago.route_data import (
     ROUTE_DATA, ROUTE_GROUPS, ROUTE_TO_GROUP, POKEMON_ROUTES,
-    FAMILY_BASE, EVOLUTION_FAMILIES, BADGE_LEVEL_THRESHOLDS
+    FAMILY_BASE, EVOLUTION_FAMILIES, BADGE_LEVEL_THRESHOLDS,
+    compute_badge_requirement,
 )
 from worlds.pokepelago.Items import ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES
 from worlds.pokepelago.data import POKEMON_DATA
@@ -78,6 +79,17 @@ for pid, routes in POKEMON_ROUTES.items():
     if min_level < 100:
         pokemon_levels[str(pid)] = min_level
 
+# Authoritative per-Pokemon badge requirement under badge-level gating, computed by the
+# SAME function generation uses (route_data.compute_badge_requirement). The client reads
+# this directly instead of recomputing from pokemonLevels, so client guessability and the
+# multiworld's access rules can't disagree for cross-gen evolutions (BUG-17). Only non-zero
+# tiers are emitted to keep the map small; the client treats a missing id as 0.
+badge_requirements = {}
+for m in POKEMON_DATA:
+    req = compute_badge_requirement(m["id"])
+    if req:
+        badge_requirements[str(m["id"])] = req
+
 output = {
     "routeInfo": route_info,
     "pokemonRoutes": pokemon_routes,
@@ -86,6 +98,7 @@ output = {
     "lineUnlockItems": line_unlock_items,
     "pokemonLevels": pokemon_levels,
     "badgeLevelThresholds": BADGE_LEVEL_THRESHOLDS,
+    "badgeRequirements": badge_requirements,
 }
 
 out_path = Path("D:/pythonProjects/PokepelagoClient/src/data/route_data.json")
