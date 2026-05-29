@@ -1,0 +1,31 @@
+name: Pokepelago Classification Audit
+
+# Diffs the committed gate-classification sets in data.py against PokeAPI live.
+# Catches new-generation / DLC drift (new legendaries, Ultra Beasts, babies, etc.)
+# that the offline test in pokepelago-tests.yml can't see, since that test only
+# compares data.py against the committed snapshot.
+#
+# Kept as a SEPARATE workflow (not part of tests/fuzz/release) so PokeAPI downtime
+# never blocks the main pipeline. Runs weekly and on demand; also on PRs that touch
+# the classification data or the tool itself.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'worlds/pokepelago/data.py'
+      - 'worlds/pokepelago/tools/build_classification_data.py'
+      - 'worlds/pokepelago/tools/classification_snapshot.json'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check classification sets against PokeAPI
+        run: python worlds/pokepelago/tools/build_classification_data.py --check
