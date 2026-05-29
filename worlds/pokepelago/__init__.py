@@ -14,7 +14,7 @@ from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, 
                    BABY_IDS, TRADE_EVO_IDS, FOSSIL_IDS, ULTRA_BEAST_IDS, PARADOX_IDS,
                    STONE_EVO_GROUPS)
 from .route_data import (ROUTE_DATA, ROUTE_GROUPS, ROUTE_TO_GROUP, POKEMON_ROUTES,
-                         FAMILY_BASE, BADGE_LEVEL_THRESHOLDS)
+                         FAMILY_BASE, BADGE_LEVEL_THRESHOLDS, compute_badge_requirement)
 from .rules import CanAccessNPokemon
 
 # Derive from GAME_REGIONS so it stays in sync automatically
@@ -493,25 +493,8 @@ class PokepelagoWorld(World):
         # Badge gating: max(level-based badges, legendary tier badges)
         badge_req = 0
         if o.badge_level_gating.value:
-            # Find the Pokemon's minimum encounter level across all its routes
-            routes = POKEMON_ROUTES.get(mon_id, [])
-            base_id = FAMILY_BASE.get(mon_id, mon_id)
-            if not routes and base_id != mon_id:
-                routes = POKEMON_ROUTES.get(base_id, [])
-            min_level = 100
-            for rk in routes:
-                route_info = ROUTE_DATA.get(rk)
-                if route_info:
-                    lvl = route_info["pokemon"].get(mon_id) or route_info["pokemon"].get(base_id)
-                    if lvl and lvl < min_level:
-                        min_level = lvl
-            # Map level to badge count using thresholds
-            for i, threshold in enumerate(BADGE_LEVEL_THRESHOLDS):
-                if min_level <= threshold:
-                    badge_req = i
-                    break
-            else:
-                badge_req = len(BADGE_LEVEL_THRESHOLDS)
+            # Shared with the client data export so both sides agree (BUG-17).
+            badge_req = compute_badge_requirement(mon_id)
 
         if o.legendary_locks.value:
             if mon_id in self._active_legendary_mythics:
@@ -554,6 +537,10 @@ class PokepelagoWorld(World):
         else:
             classification = ItemClassification.filler
             item_id = item_table.get(name, 0)
+        # FEAT-14: optionally demote Pokedex/Pokegear from useful to filler so they
+        # stop crowding the useful tier. Master Ball is intentionally unaffected.
+        if name in ("Pokedex", "Pokegear") and self.options.pokegear_pokedex_filler.value:
+            classification = ItemClassification.filler
         return PokepelagoItem(name, classification, item_id, self.player)
 
     def create_event_item(self, name: str) -> PokepelagoItem:
@@ -881,6 +868,7 @@ class PokepelagoWorld(World):
             "stone_locks":       bool(o.stone_locks.value),
             "include_shinies":   bool(o.include_shinies.value),
             "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
+            "stop_autosubmit_on_goal": bool(o.stop_autosubmit_on_goal.value),
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
             "starting_starters": sorted(self.starter_names),
