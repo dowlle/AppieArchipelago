@@ -150,11 +150,17 @@ def fetch_expected() -> dict:
     }
 
 
-def load_committed() -> dict:
-    """Load the frozensets currently committed in data.py (no AP env needed)."""
+def _load_data_module():
+    """Import data.py standalone (it has no AP dependencies)."""
     spec = importlib.util.spec_from_file_location("pokepelago_data", os.path.abspath(DATA_PY))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    return mod
+
+
+def load_committed() -> dict:
+    """Load the frozensets currently committed in data.py (no AP env needed)."""
+    mod = _load_data_module()
     return {
         "legendary": set(mod.LEGENDARY_SUB_IDS | mod.LEGENDARY_BOX_IDS),
         "mythical": set(mod.LEGENDARY_MYTHIC_IDS),
@@ -196,6 +202,68 @@ def diff(expected: dict, committed: dict) -> list:
     return problems
 
 
+def write_client_gates(out_path: str) -> None:
+    """Project data.py's gate sets into the client's pokemon_gates.ts.
+
+    The client's GameContext.isPokemonGuessable() / useGateChecks enforce the same
+    locks client-side, so this file must mirror data.py exactly or the client and
+    APWorld will disagree about what is gated (BUG-12 / BUG-16). data.py is the single
+    source of truth; this regenerates the TypeScript mirror from it.
+    """
+    mod = _load_data_module()
+
+    def emit_set(name, ids):
+        nums = sorted(ids)
+        rows = [", ".join(str(n) for n in nums[i:i + 12]) for i in range(0, len(nums), 12)]
+        body = ",\n    ".join(rows)
+        return f"export const {name} = new Set<number>([\n    {body},\n]);\n"
+
+    stone_groups = mod.STONE_EVO_GROUPS  # preserves data.py insertion order
+    stone_lines = ",\n".join(
+        f"    {group}: new Set([{', '.join(str(n) for n in sorted(ids))}])"
+        for group, ids in stone_groups.items()
+    )
+    stone_order = ", ".join(f"'{g}'" for g in stone_groups)
+
+    parts = [
+        "/**",
+        " * pokemon_gates.ts",
+        " *",
+        " * AUTO-GENERATED from worlds/pokepelago/data.py by",
+        " * tools/build_classification_data.py --write-gates. DO NOT EDIT BY HAND.",
+        " *",
+        " * Mirror of the APWorld gate-classification sets, consumed by",
+        " * GameContext.isPokemonGuessable() / useGateChecks to enforce locks client-side.",
+        " * Regenerate after any data.py classification change so the client and the",
+        " * APWorld never disagree about what is gated (see BUG-12 / BUG-16).",
+        " */",
+        "",
+        "// Sub-legendaries — require 6 Gym Badges",
+        emit_set("SUB_LEGENDARY_IDS", mod.LEGENDARY_SUB_IDS),
+        "// Box legendaries — require 7 Gym Badges",
+        emit_set("BOX_LEGENDARY_IDS", mod.LEGENDARY_BOX_IDS),
+        "// Mythics — require 8 Gym Badges",
+        emit_set("MYTHIC_IDS", mod.LEGENDARY_MYTHIC_IDS),
+        "// Baby Pokémon — require Daycare item(s)",
+        emit_set("BABY_IDS", mod.BABY_IDS),
+        "// Trade-evolved Pokémon — require Link Cable",
+        emit_set("TRADE_EVO_IDS", mod.TRADE_EVO_IDS),
+        "// Fossil Pokémon — require Fossil Restorer",
+        emit_set("FOSSIL_IDS", mod.FOSSIL_IDS),
+        "// Ultra Beasts — require Ultra Wormhole (Necrozma #800 included by project choice)",
+        emit_set("ULTRA_BEAST_IDS", mod.ULTRA_BEAST_IDS),
+        "// Paradox Pokémon — require Time Rift",
+        emit_set("PARADOX_IDS", mod.PARADOX_IDS),
+        "// Stone-only evolutions — require the matching evolutionary stone item.",
+        "export const STONE_EVO_IDS: Record<string, Set<number>> = {\n" + stone_lines + ",\n};\n",
+        "// Ordered stone names matching APWorld item ID offsets (6010 + index)",
+        f"export const STONE_NAMES_ORDERED = [\n    {stone_order},\n] as const;\n",
+    ]
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(parts))
+    print(f"wrote {out_path}")
+
+
 def to_snapshot(expected: dict) -> dict:
     snap = {k: sorted(expected[k]) for k in
             ["legendary", "mythical", "baby", "ultra_beast", "paradox", "fossil", "trade_evo"]}
@@ -207,9 +275,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="diff committed data.py against live PokeAPI")
     ap.add_argument("--snapshot", action="store_true", help="write classification_snapshot.json from live PokeAPI")
+    ap.add_argument("--write-gates", metavar="PATH",
+                    help="regenerate the client's pokemon_gates.ts from data.py (no network)")
     args = ap.parse_args()
-    if not (args.check or args.snapshot):
-        ap.error("pass --check or --snapshot")
+    if not (args.check or args.snapshot or args.write_gates):
+        ap.error("pass --check, --snapshot, and/or --write-gates")
+
+    # --write-gates is a pure data.py -> TS projection; it needs no network.
+    if args.write_gates:
+        write_client_gates(args.write_gates)
+        if not (args.check or args.snapshot):
+            return 0
 
     expected = fetch_expected()
 
