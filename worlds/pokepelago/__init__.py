@@ -869,6 +869,20 @@ class PokepelagoWorld(World):
             "include_shinies":   bool(o.include_shinies.value),
             "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
             "stop_autosubmit_on_goal": bool(o.stop_autosubmit_on_goal.value),
+            # DEVEX-15: ship the exact gate classification this APWorld used so the client
+            # gates identically to the generating server (no client-bundled drift, and old
+            # clients stay correct against future reclassifications). Always present.
+            "gate_categories": {
+                "legendary_sub":   sorted(LEGENDARY_SUB_IDS),
+                "legendary_box":   sorted(LEGENDARY_BOX_IDS),
+                "legendary_mythic": sorted(LEGENDARY_MYTHIC_IDS),
+                "baby":            sorted(BABY_IDS),
+                "trade_evo":       sorted(TRADE_EVO_IDS),
+                "fossil":          sorted(FOSSIL_IDS),
+                "ultra_beast":     sorted(ULTRA_BEAST_IDS),
+                "paradox":         sorted(PARADOX_IDS),
+                "stone_evo":       {stone: sorted(ids) for stone, ids in STONE_EVO_GROUPS.items()},
+            },
             "shiny_count":       self.shiny_count,
             "starting_starter":  self.chosen_starter,
             "starting_starters": sorted(self.starter_names),

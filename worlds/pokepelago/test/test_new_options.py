@@ -33,3 +33,25 @@ class TestStopAutosubmitSlotData(WorldTestBase):
 
     def test_slot_data_flag_present(self):
         self.assertIs(self.world.fill_slot_data()["stop_autosubmit_on_goal"], True)
+
+
+class TestGateCategoriesSlotData(WorldTestBase):
+    """DEVEX-15: slot_data carries the exact gate classification this APWorld used."""
+    game = "Pokepelago"
+
+    def test_gate_categories_match_data(self):
+        from worlds.pokepelago import data
+        gc = self.world.fill_slot_data()["gate_categories"]
+        self.assertEqual(set(gc["legendary_sub"]), set(data.LEGENDARY_SUB_IDS))
+        self.assertEqual(set(gc["legendary_box"]), set(data.LEGENDARY_BOX_IDS))
+        self.assertEqual(set(gc["legendary_mythic"]), set(data.LEGENDARY_MYTHIC_IDS))
+        self.assertEqual(set(gc["baby"]), set(data.BABY_IDS))
+        self.assertEqual(set(gc["trade_evo"]), set(data.TRADE_EVO_IDS))
+        self.assertEqual(set(gc["fossil"]), set(data.FOSSIL_IDS))
+        self.assertEqual(set(gc["ultra_beast"]), set(data.ULTRA_BEAST_IDS))
+        self.assertEqual(set(gc["paradox"]), set(data.PARADOX_IDS))
+        self.assertEqual(set(gc["stone_evo"].keys()), set(data.STONE_EVO_GROUPS.keys()))
+        # Spot-check the BUG-16 fixes are carried over the wire
+        self.assertIn(773, gc["legendary_sub"])      # Silvally
+        self.assertIn(489, gc["legendary_mythic"])   # Phione (moved to mythic)
+        self.assertIn(804, gc["ultra_beast"])        # Naganadel
