@@ -16,3 +16,6 @@ tools/
 __pycache__/
 *.pyc
 *.pyo
+
+# Repository docs, not needed at runtime
+README.md
