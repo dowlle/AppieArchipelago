@@ -9,7 +9,7 @@ This folder is the apworld. The client repository is the release surface; the `.
 
 ## AI usage
 
-I use Claude Code while developing Pokepelago. It helps with implementation, debugging, and review, while I make the design decisions and test releases in the browser. The project does not use AI-generated art. I am disclosing this because I want people to know how the project is made. I have ADHD, and this is one of the tools that helps me turn ideas into finished projects.
+I use AI while developing Pokepelago. It helps with implementation, debugging, and review, while I make the design decisions and test releases in the browser. The project does not use AI-generated art. I am disclosing this because I want people to know how the project is made. I have ADHD, and this is one of the tools that helps me turn ideas into finished projects.
 
 More detail about how I use and verify AI-assisted work is available in the client repository's [AI usage note](https://github.com/dowlle/PokepelagoClient/blob/main/AI_USAGE.md).
 
