@@ -24,12 +24,10 @@ form from these parameters and connect.
 
 from __future__ import annotations
 
-import os
-import subprocess
 import urllib.parse
 import webbrowser
 
-from Utils import is_macos, is_windows, messagebox
+from Utils import messagebox
 from worlds.LauncherComponents import Component, Type, components, launch_textclient
 
 GAME_NAME = "Pokepelago"
@@ -85,21 +83,13 @@ def build_desktop_uri(connection: dict[str, str]) -> str:
 
 
 def _open_external(uri: str) -> bool:
-    if is_windows:
-        startfile = getattr(os, "startfile", None)
-        if startfile is not None:
-            try:
-                startfile(uri)
-                return True
-            except OSError:
-                return False
-        return False
-    opener = "open" if is_macos else "xdg-open"
+    # webbrowser hands a custom-scheme URI to the OS default handler on every
+    # platform (os.startfile on Windows, open on macOS, xdg-open on Linux), so
+    # no direct process spawning is needed here.
     try:
-        subprocess.Popen([opener, uri])
-    except OSError:
+        return webbrowser.open(uri)
+    except Exception:
         return False
-    return True
 
 
 def _open_web(connection: dict[str, str] | None) -> None:
