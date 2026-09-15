@@ -152,6 +152,7 @@ class TrapChance(Range):
 class FillerWeights(OptionCounter):
     """Controls the relative weight of each filler item category.
     Higher values mean that category appears more often. Set a category to 0 to disable it entirely.
+    Categories you leave out of your YAML keep their default weight; only an explicit 0 disables one.
     Traps are controlled separately by the 'Trap Chance' option.
     Categories: master_ball, key_items, splash."""
     display_name = "Filler Item Weights"
@@ -196,6 +197,7 @@ class LocalFillerPercent(NamedRange):
 class TrapWeights(OptionCounter):
     """Controls the relative weight of each trap type when a trap slot is filled.
     Higher values mean that trap appears more often. Set a trap to 0 to disable it entirely.
+    Traps you leave out of your YAML keep their default weight; only an explicit 0 disables one.
     The overall chance of a trap appearing is controlled by 'Trap Chance'.
     Traps: small_shuffle, big_shuffle, derpy_mon, release."""
     display_name = "Trap Weights"
@@ -492,6 +494,17 @@ class StopAutosubmitOnGoal(Toggle):
     default = 0
 
 
+class HideSpoilers(Toggle):
+    """If on, every per-Pokemon location name is shown as its National Dex number
+    instead of the Pokemon name ('Guess Bulbasaur' becomes 'Guess Pokemon 1').
+    This stops hints and tracker location lists from giving away which Pokemon
+    are available to guess. It is cosmetic only: location ids, logic, checks and
+    item names are unchanged, so generation and completion are identical either way.
+    Useful for streams or shared screens. Off by default."""
+    display_name = "Hide Spoilers (Dex Numbers)"
+    default = 0
+
+
 @dataclass
 class PokepelagoOptions(PerGameCommonOptions):
     dexsanity: Dexsanity
@@ -523,6 +536,7 @@ class PokepelagoOptions(PerGameCommonOptions):
     goal_percentage: GoalPercentage
     goal_count: GoalCount
     stop_autosubmit_on_goal: StopAutosubmitOnGoal
+    hide_spoilers: HideSpoilers
     trap_chance: TrapChance
     trap_weights: TrapWeights
     filler_weights: FillerWeights
@@ -545,5 +559,6 @@ pokepelago_option_groups: list[OptionGroup] = [
     OptionGroup("Lock Gates", [EnableTypeLocks, RouteLocks, LineLocks, BadgeLevelGating,
                                LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
-    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, StopAutosubmitOnGoal, TrapChance, TrapWeights, FillerWeights, LocalFillerPercent], start_collapsed=True),
+    OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, TrapChance, TrapWeights, FillerWeights, LocalFillerPercent], start_collapsed=True),
+    OptionGroup("Display", [HideSpoilers, StopAutosubmitOnGoal]),
 ]

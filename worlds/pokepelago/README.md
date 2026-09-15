@@ -2,7 +2,8 @@
 
 A Pokémon guessing game for Archipelago. You guess Pokémon names in the web client, and the multiworld hands out type keys, route keys and other unlocks that decide what you can catch next.
 
-- Play it: [Pokepelago Client](https://dowlle.github.io/PokepelagoClient/)
+- Play it: [Pokepelago Client](https://pokepelago.ap-pie.com/)
+- Setup guide: [Pokepelago on AP-Pie](https://ap-pie.com/guides/pokepelago)
 - Client repository, releases and issue tracker: [dowlle/PokepelagoClient](https://github.com/dowlle/PokepelagoClient)
 
 This folder is the apworld. The client repository is the release surface; the `.apworld` for each version is attached to the client release.

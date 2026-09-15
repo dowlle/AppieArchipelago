@@ -1,13 +1,16 @@
+import logging
 from collections import Counter
+from copy import deepcopy
 from typing import Any
 
 from BaseClasses import Region, Entrance, ItemClassification, Tutorial, CollectionState
 from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
-from worlds.AutoWorld import World, WebWorld
+from worlds.AutoWorld import World, WebWorld, data_package_checksum
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
                     ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES, ITEM_NAME_GROUPS)
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
-                        TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES)
+                        TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES,
+                        LOCATION_ID_OFFSET)
 from .Options import PokepelagoOptions, pokepelago_option_groups, _LEGACY_REGION_MAP
 from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, REGION_MON_COUNTS,
                    MICRO_REGION_MON_THRESHOLD, STARTERS_BY_REGION, get_pokemon_region,
@@ -191,7 +194,12 @@ class PokepelagoWorld(World):
         if o.badge_level_gating.value and len(active_ids) < MICRO_REGION_MON_THRESHOLD:
             o.badge_level_gating.value = 0
 
-        # Ensure enough starting locations when multiple gates are active
+        # Ensure enough starting locations when multiple gates are active.
+        # BUG-22 (issue #17): this floor is load-bearing, not vestigial. With 6 lock options
+        # and starting_location_count 0, 4/20 seeds FillError (2026-09-15 repro; fuzz seed
+        # 202 as well), because the free Oak's Lab checks are the fill slack that early
+        # spheres need. So the floor stays. What changes is the silence: the raise is now
+        # announced so a player who set 0 learns why checks fly at connect.
         gate_count = sum(bool(v) for v in [
             o.type_locks.value, o.region_locks.value, o.route_locks_enabled.value,
             o.line_locks.value, o.badge_level_gating.value, o.legendary_locks.value,
@@ -200,7 +208,15 @@ class PokepelagoWorld(World):
         ])
         if gate_count >= 2:
             min_starts = min(gate_count, 8)
-            o.starting_location_count.value = max(o.starting_location_count.value, min_starts)
+            current = o.starting_location_count.value
+            if current < min_starts:
+                logging.warning(
+                    f"Pokepelago ({self.player_name}): starting_location_count raised from "
+                    f"{current} to {min_starts} because {gate_count} lock options are active. "
+                    f"Generation needs these free starting checks to place the lock items; "
+                    f"use at most one lock option to play with 0 starting locations."
+                )
+                o.starting_location_count.value = min_starts
 
         # BUG-25 (F4, hardened 2026-08-31): the residual hand-crafted case. Random selection
         # can no longer roll a lone micro-region (see _select_active_regions), but an explicit
@@ -1078,6 +1094,50 @@ class PokepelagoWorld(World):
             "type_milestones": self._created_type_milestones,
         }
 
+    # ── Generated-room datapackage ──────────────────────────────────────────────
+
+    def modify_multidata(self, multidata: dict[str, Any]) -> None:
+        """Rewrite this room's Pokepelago location names to National Dex numbers.
+
+        Datapackages are per game, not per player. With Hide Spoilers on, each
+        per-Pokemon ``Guess {Name}`` entry in the generated room's package becomes
+        ``Guess Pokemon {dex}``. The world's registered name/id map and every
+        Location object stay untouched, so logic, checks, item names and the
+        spoiler log are unaffected. Clients, hints and the server/tracker all
+        resolve location names from this datapackage, so one rewrite covers every
+        user-facing surface. ``re_gen_passthrough`` (Universal Tracker) rebuilds
+        from the class-level map and is not touched here.
+        """
+        if not self.options.hide_spoilers.value:
+            return
+        package = multidata["datapackage"].get(self.game)
+        if not package:
+            return
+
+        renames = {
+            name: f"Guess Pokemon {code - LOCATION_ID_OFFSET}"
+            for name, code in package["location_name_to_id"].items()
+            if name.startswith("Guess ")
+        }
+        if not renames:
+            return
+
+        package = deepcopy(package)
+        package["location_name_to_id"] = {
+            renames.get(name, name): code
+            for name, code in package["location_name_to_id"].items()
+        }
+        if package.get("location_name_groups"):
+            package["location_name_groups"] = {
+                group: [renames.get(name, name) for name in names]
+                for group, names in package["location_name_groups"].items()
+            }
+
+        package.pop("checksum", None)
+        package = dict(sorted(package.items()))
+        package["checksum"] = data_package_checksum(package)
+        multidata["datapackage"][self.game] = package
+
     # ── Universal Tracker support ───────────────────────────────────────────────
 
     @staticmethod
@@ -1122,3 +1182,8 @@ class PokepelagoWorld(World):
 
         # Rebuild all derived state from restored regions (shared with generate_early)
         self._rebuild_derived_state()
+
+
+# Registers the Launcher components / slot-link connect flow. Imported last so the world
+# class above is fully defined first (mirrors worlds/apquest).
+from . import launcher as launcher  # noqa: E402

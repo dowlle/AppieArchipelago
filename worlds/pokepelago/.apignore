@@ -8,8 +8,9 @@ _dev/
 test/
 
 # Developer-only scripts + data sources (regenerate data files / scrape sources / perf
-# harness). Never imported at runtime — the world imports only data.py, route_data.py,
-# Items.py, Locations.py, Options.py, rules.py at the package root. FEAT-19.
+# harness). Never imported at runtime. The runtime set at the package root is
+# __init__.py, archipelago.json, data.py, route_data.py, Items.py, Locations.py,
+# Options.py, rules.py, logic_mixin.py, launcher.py (plus LICENSE). FEAT-19.
 tools/
 
 # Compiled Python bytecode
