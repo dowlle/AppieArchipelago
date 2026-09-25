@@ -7,7 +7,8 @@ from BaseClasses import Region, Entrance, ItemClassification, Tutorial, Collecti
 from rule_builder.rules import Has, HasAll, HasAllCounts, HasAny
 from worlds.AutoWorld import World, WebWorld, data_package_checksum
 from .Items import (PokepelagoItem, item_table, item_data_table, GEN_1_TYPES, FILLER_ITEM_CATEGORIES,
-                    ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES, ITEM_NAME_GROUPS)
+                    ROUTE_KEY_NAMES, LINE_UNLOCK_NAMES, ITEM_NAME_GROUPS, ITEM_ID_OFFSET,
+                    LINE_UNLOCK_OFFSET)
 from .Locations import (PokepelagoLocation, location_table, milestones, starting_locations,
                         TYPE_MILESTONE_STEPS, DEXSANITY_OFF_EXTRA_STEPS, ROUTE_MILESTONE_NAMES,
                         LOCATION_ID_OFFSET)
@@ -1097,16 +1098,19 @@ class PokepelagoWorld(World):
     # ── Generated-room datapackage ──────────────────────────────────────────────
 
     def modify_multidata(self, multidata: dict[str, Any]) -> None:
-        """Rewrite this room's Pokepelago location names to National Dex numbers.
+        """Rewrite this room's Pokepelago names to National Dex numbers.
 
         Datapackages are per game, not per player. With Hide Spoilers on, each
-        per-Pokemon ``Guess {Name}`` entry in the generated room's package becomes
-        ``Guess Pokemon {dex}``. The world's registered name/id map and every
-        Location object stay untouched, so logic, checks, item names and the
-        spoiler log are unaffected. Clients, hints and the server/tracker all
-        resolve location names from this datapackage, so one rewrite covers every
-        user-facing surface. ``re_gen_passthrough`` (Universal Tracker) rebuilds
-        from the class-level map and is not touched here.
+        per-Pokemon ``Guess {Name}`` location in the generated room's package
+        becomes ``Guess Pokemon {dex}`` and each ``{Name} Line`` unlock item
+        becomes ``Pokemon {dex} Line`` (dex of the family's base form); the never-placed
+        per-Pokemon ``{Name} Unlock`` entries follow the same scheme. The
+        world's registered name/id maps and every Location/Item object stay
+        untouched, so logic, checks and the spoiler log are unaffected. Clients,
+        hints, received-item messages and the server/tracker all resolve names
+        from this datapackage, so one rewrite covers every user-facing surface.
+        ``re_gen_passthrough`` (Universal Tracker) rebuilds from the class-level
+        maps and is not touched here.
         """
         if not self.options.hide_spoilers.value:
             return
@@ -1114,23 +1118,41 @@ class PokepelagoWorld(World):
         if not package:
             return
 
-        renames = {
+        location_renames = {
             name: f"Guess Pokemon {code - LOCATION_ID_OFFSET}"
             for name, code in package["location_name_to_id"].items()
             if name.startswith("Guess ")
         }
-        if not renames:
+        line_unlock_names = ITEM_NAME_GROUPS["Line Unlocks"]
+        item_renames = {}
+        for name, code in package["item_name_to_id"].items():
+            if name in line_unlock_names:
+                item_renames[name] = f"Pokemon {code - ITEM_ID_OFFSET - LINE_UNLOCK_OFFSET} Line"
+            elif name.endswith(" Unlock") and 0 < code - ITEM_ID_OFFSET < 2000:
+                # Per-Pokemon unlock ids sit directly at ITEM_ID_OFFSET + dex (never
+                # placed, kept for id stability, but still listed in the datapackage).
+                item_renames[name] = f"Pokemon {code - ITEM_ID_OFFSET} Unlock"
+        if not location_renames and not item_renames:
             return
 
         package = deepcopy(package)
         package["location_name_to_id"] = {
-            renames.get(name, name): code
+            location_renames.get(name, name): code
             for name, code in package["location_name_to_id"].items()
         }
         if package.get("location_name_groups"):
             package["location_name_groups"] = {
-                group: [renames.get(name, name) for name in names]
+                group: [location_renames.get(name, name) for name in names]
                 for group, names in package["location_name_groups"].items()
+            }
+        package["item_name_to_id"] = {
+            item_renames.get(name, name): code
+            for name, code in package["item_name_to_id"].items()
+        }
+        if package.get("item_name_groups"):
+            package["item_name_groups"] = {
+                group: [item_renames.get(name, name) for name in names]
+                for group, names in package["item_name_groups"].items()
             }
 
         package.pop("checksum", None)

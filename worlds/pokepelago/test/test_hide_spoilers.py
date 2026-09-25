@@ -8,6 +8,7 @@ map and its Location objects stay untouched.
 """
 from test.bases import WorldTestBase
 from worlds.pokepelago import PokepelagoWorld
+from worlds.pokepelago.Items import ITEM_ID_OFFSET, LINE_UNLOCK_OFFSET
 from worlds.pokepelago.Locations import LOCATION_ID_OFFSET
 
 
@@ -38,6 +39,30 @@ class TestHideSpoilersOn(WorldTestBase):
         self.assertIn("Guessed 1 Pokemon", names)
         self.assertIn("Pokedex Received", names)
 
+    def test_line_unlock_items_become_dex_numbers(self):
+        multidata = _room_package()
+        self.world.modify_multidata(multidata)
+        package = multidata["datapackage"]["Pokepelago"]
+        items = package["item_name_to_id"]
+
+        self.assertNotIn("Bulbasaur Line", items)
+        self.assertIn("Pokemon 1 Line", items)
+        self.assertEqual(items["Pokemon 1 Line"], ITEM_ID_OFFSET + LINE_UNLOCK_OFFSET + 1)
+        for name in items:
+            if name.endswith(" Line"):
+                self.assertRegex(name, r"^Pokemon \d+ Line$")
+
+        # Other items keep their names.
+        self.assertIn("Master Ball", items)
+        self.assertIn("Grass Type Key", items)
+        self.assertNotIn("Bulbasaur Unlock", items)
+        self.assertEqual(items["Pokemon 1 Unlock"], ITEM_ID_OFFSET + 1)
+
+        # The item group follows the rename.
+        group = package["item_name_groups"]["Line Unlocks"]
+        self.assertIn("Pokemon 1 Line", group)
+        self.assertNotIn("Bulbasaur Line", group)
+
     def test_checksum_is_recomputed(self):
         original = PokepelagoWorld.get_data_package_data()
         multidata = {"datapackage": {"Pokepelago": original}}
@@ -50,6 +75,7 @@ class TestHideSpoilersOn(WorldTestBase):
         multidata = _room_package()
         self.world.modify_multidata(multidata)
         self.assertIn("Guess Bulbasaur", PokepelagoWorld.location_name_to_id)
+        self.assertIn("Bulbasaur Line", PokepelagoWorld.item_name_to_id)
 
     def test_idempotent(self):
         multidata = _room_package()
@@ -73,3 +99,4 @@ class TestHideSpoilersOff(WorldTestBase):
             original["location_name_to_id"],
         )
         self.assertIn("Guess Bulbasaur", multidata["datapackage"]["Pokepelago"]["location_name_to_id"])
+        self.assertIn("Bulbasaur Line", multidata["datapackage"]["Pokepelago"]["item_name_to_id"])
