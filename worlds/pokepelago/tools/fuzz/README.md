@@ -10,7 +10,7 @@ A pure-Python cross-check that replays every generated Pokepelago multiworld
 through a faithful port of the **client's** item decoders
 (`PokepelagoClient/src/data/itemDecoding.ts` + `routeData.ts` + `useOffsets.ts`)
 and asserts that each placed Route Key / Line Unlock / Region Pass / Type Key /
-gate item decodes back to the item's real `name`.
+gate / useful item decodes back to the item's real `name`.
 
 It is the seed-driven counterpart to DEVEX-16 Phase 1 (the client Vitest suite):
 Phase 1 fires synthetic IDs at the decoders; this fires **real generated seeds**
@@ -40,8 +40,8 @@ python fuzz.py -j 8 -g pokepelago -r 500 -n 1 -t 60 --hook hooks.client_item_dec
 ```
 
 Set `POKEPELAGO_DECODE_STATS=/path/to/stats.txt` to append per-seed decode
-coverage counts (`checked route line region type gate`) for evidence gathering;
-unset in normal runs.
+coverage counts (`checked route line region type gate useful`) for evidence
+gathering; unset in normal runs.
 
 ### CI
 
