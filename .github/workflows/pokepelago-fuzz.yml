@@ -4,7 +4,6 @@ on:
   push:
     paths: ['worlds/pokepelago/**']
   pull_request:
-    paths: ['worlds/pokepelago/**']
 
 # We inline the composite steps from Eijebong/ap-actions/fuzz so we can pass
 # -t 60 to fuzz.py. The action's default per-seed timeout is ~15s, which GitHub
@@ -15,7 +14,31 @@ on:
 # without changing any APWorld generation logic.
 # Upstream reference: https://github.com/Eijebong/ap-actions/blob/main/fuzz/action.yml
 jobs:
+  # Required status check: runs on every PR so branch protection never waits on a
+  # workflow that a path filter skipped. The real job is skipped (reported as
+  # passing) when the PR does not touch worlds/pokepelago.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pokepelago: ${{ steps.filter.outputs.pokepelago }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "pokepelago=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "${{ github.event.pull_request.base.sha }}" HEAD -- worlds/pokepelago .github/workflows; then
+            echo "pokepelago=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pokepelago=true" >> "$GITHUB_OUTPUT"
+          fi
+
   fuzz:
+    needs: changes
+    if: needs.changes.outputs.pokepelago == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
