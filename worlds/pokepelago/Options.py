@@ -495,12 +495,13 @@ class StopAutosubmitOnGoal(Toggle):
 
 
 class HideSpoilers(Toggle):
-    """If on, every per-Pokemon location name is shown as its National Dex number
-    instead of the Pokemon name ('Guess Bulbasaur' becomes 'Guess Pokemon 1').
-    This stops hints and tracker location lists from giving away which Pokemon
-    are available to guess. It is cosmetic only: location ids, logic, checks and
-    item names are unchanged, so generation and completion are identical either way.
-    Useful for streams or shared screens. Off by default."""
+    """If on, per-Pokemon names are shown as National Dex numbers: the location
+    'Guess Bulbasaur' becomes 'Guess Pokemon 1' and the unlock item 'Bulbasaur Line'
+    becomes 'Pokemon 1 Line'. This stops hints, received-item messages and tracker
+    lists from giving away which Pokemon are available to guess. It is cosmetic only:
+    location and item ids, logic and checks are unchanged, so generation and
+    completion are identical either way. Useful for streams or shared screens.
+    Off by default."""
     display_name = "Hide Spoilers (Dex Numbers)"
     default = 0
 
