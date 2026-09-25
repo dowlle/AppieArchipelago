@@ -28,6 +28,22 @@ from .logic_mixin import build_pp_index, pp_apply
 # Derive from GAME_REGIONS so it stays in sync automatically
 _REGION_BY_INDEX: dict[int, str] = {i + 1: r for i, r in enumerate(GAME_REGIONS)}
 
+# ISSUE-40: map the GuessLanguage YAML option key to the client's language codes.
+# roomaji and the two zh- variants differ from their YAML names.
+GUESS_LANGUAGE_CODES: dict[str, str] = {
+    "global": "global",
+    "en": "en",
+    "fr": "fr",
+    "de": "de",
+    "es": "es",
+    "it": "it",
+    "ja": "ja",
+    "roomaji": "roomaji",
+    "ko": "ko",
+    "zh_hant": "zh-Hant",
+    "zh_hans": "zh-Hans",
+}
+
 
 class PokepelagoWeb(WebWorld):
     option_groups = pokepelago_option_groups
@@ -1073,6 +1089,8 @@ class PokepelagoWorld(World):
             "include_shinies":   bool(o.include_shinies.value),
             "master_ball_bypass_gates": bool(o.master_ball_bypass_gates.value),
             "stop_autosubmit_on_goal": bool(o.stop_autosubmit_on_goal.value),
+            # ISSUE-40: seed the client's default guess language from the YAML.
+            "guess_language": GUESS_LANGUAGE_CODES.get(o.guess_language.current_key, "global"),
             # DEVEX-15: ship the exact gate classification this APWorld used so the client
             # gates identically to the generating server (no client-bundled drift, and old
             # clients stay correct against future reclassifications). Always present.

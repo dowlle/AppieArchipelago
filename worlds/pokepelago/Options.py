@@ -505,6 +505,30 @@ class HideSpoilers(Toggle):
     default = 0
 
 
+class GuessLanguage(Choice):
+    """Default language the client's guess input accepts for this slot.
+    'global' (default) accepts any language the client knows. This sets the
+    starting guess language only for players who have not picked one on the
+    site; once a player chooses a language there, that choice always wins and
+    the YAML option no longer applies. Handy for streamers (e.g. catch by
+    German names for the streamer while the audience guesses in English) or as
+    a per-game default in multiworlds. Client-side only: has no effect on
+    generation or logic."""
+    display_name = "Guess Language"
+    option_global = 0
+    option_en = 1
+    option_fr = 2
+    option_de = 3
+    option_es = 4
+    option_it = 5
+    option_ja = 6
+    option_roomaji = 7
+    option_ko = 8
+    option_zh_hant = 9
+    option_zh_hans = 10
+    default = 0
+
+
 @dataclass
 class PokepelagoOptions(PerGameCommonOptions):
     dexsanity: Dexsanity
@@ -541,6 +565,7 @@ class PokepelagoOptions(PerGameCommonOptions):
     trap_weights: TrapWeights
     filler_weights: FillerWeights
     local_filler_percent: LocalFillerPercent
+    guess_language: GuessLanguage
     # Legacy region toggles (hidden, backward compat only)
     include_kanto: IncludeKanto
     include_johto: IncludeJohto
@@ -560,5 +585,5 @@ pokepelago_option_groups: list[OptionGroup] = [
                                LegendaryLocks, TradeLocks, BabyLocks, DaycareCount,
                                FossilLocks, UltraBeastLocks, ParadoxLocks, StoneLocks], start_collapsed=True),
     OptionGroup("Items", [IncludeShinies, MasterBallBypassGates, PokegearPokedexFiller, TrapChance, TrapWeights, FillerWeights, LocalFillerPercent], start_collapsed=True),
-    OptionGroup("Display", [HideSpoilers, StopAutosubmitOnGoal]),
+    OptionGroup("Display", [HideSpoilers, StopAutosubmitOnGoal, GuessLanguage]),
 ]
