@@ -3,8 +3,8 @@ DEVEX-16 Phase 2 — client item-decode fuzzer hook.
 
 A pure-Python cross-check that replays every generated Pokepelago multiworld
 through a faithful port of the CLIENT'S item decoders and asserts that each
-placed Route Key / Line Unlock / Region Pass / Type Key / gate item decodes
-back to the item's real ``name``. No Node, no headless client spin-up — it runs
+placed Route Key / Line Unlock / Region Pass / Type Key / gate / useful item
+decodes back to the item's real ``name``. No Node, no headless client spin-up — it runs
 inside the existing Eijebong fuzz.py harness at the same per-seed cost as the
 other hooks.
 
@@ -30,6 +30,11 @@ What is genuinely independent here (i.e. what this actually catches):
   * Type Keys /  — the client hard-codes the ordered name lists (TYPE_NAMES_ORDERED,
     Region Pass    REGION_NAMES_ORDERED) and the gate ID map. Ported verbatim, so
     / Gate items   any reorder / rename / offset change on the APWorld side is caught.
+  * Useful items — the client's USEFUL_ITEM_NAMES_ORDERED trio (Master Ball,
+                   Pokedex, Pokegear) at USEFUL_ITEM_OFFSET + 1/+2/+3, ported
+                   verbatim. This is the range BUG-24 lived in (Pokedex and
+                   Pokegear decoded transposed); the hook previously skipped it,
+                   so a regression there could not fail a fuzz check.
   * Every category also validates the client's hard-coded offsets
     (``useOffsets.ts`` NEW_OFFSETS) against the APWorld's real IDs, so an offset
     change on either side is caught too.
@@ -68,6 +73,7 @@ _STATS_PATH = os.environ.get("POKEPELAGO_DECODE_STATS")
 # src/hooks/useOffsets.ts  (NEW_OFFSETS — the scheme every v0.6+ APWorld uses)
 CLIENT_ITEM_OFFSET = 8574000
 TYPE_ITEM_OFFSET = 2000
+USEFUL_ITEM_OFFSET = 3000
 REGION_PASS_OFFSET = 5000
 GATE_ITEM_OFFSET = 6000
 ROUTE_KEY_OFFSET = 7000
@@ -83,6 +89,12 @@ CLIENT_REGION_NAMES_ORDERED = [
     "Kanto", "Johto", "Hoenn", "Sinnoh", "Unova",
     "Kalos", "Alola", "Galar", "Hisui", "Paldea",
 ]
+
+# src/data/itemDecoding.ts — USEFUL_ITEM_NAMES_ORDERED, and the decode rule
+# ``idx = item_id - (ITEM_OFFSET + USEFUL_ITEM_OFFSET) - 1`` from
+# decodeUsefulItem(). APWorld's Items.py assigns 3001/3002/3003 to
+# Master Ball/Pokedex/Pokegear. BUG-24 was the client transposing +2/+3.
+CLIENT_USEFUL_ITEM_NAMES_ORDERED = ["Master Ball", "Pokedex", "Pokegear"]
 
 # src/context/GameContext.tsx gate checks + src/data/pokemon_gates.ts
 # STONE_NAMES_ORDERED. The client keys stones internally ('fire', ...) at
@@ -130,9 +142,15 @@ class _ClientDecoder:
     ordering / offsets / hard-coded lists are the independent client logic.
     """
 
-    def __init__(self, items_module):
+    def __init__(self, items_module, useful_names=None):
         route_key_names = items_module.ROUTE_KEY_NAMES      # slug -> "<display> Key"
         line_unlock_names = items_module.LINE_UNLOCK_NAMES  # base_id(int) -> "<mon> Line"
+
+        # Useful-item ordered names (overridable so tests can model the BUG-24
+        # transposition). Defaults to the client's canonical port above.
+        self._useful_names = list(
+            CLIENT_USEFUL_ITEM_NAMES_ORDERED if useful_names is None else useful_names
+        )
 
         # Client's two-phase route-key ordering (routeData.ts ROUTE_KEY_ORDER):
         # non-ungrouped slugs sorted, then ungrouped (roaming-/virtual-) slugs sorted.
@@ -153,11 +171,14 @@ class _ClientDecoder:
 
     def category(self, item_id):
         """Return the client decoder category for an item ID, or None if the ID
-        is outside every decoder's range (e.g. Pokemon Unlock / useful / trap /
-        filler — handled by other client paths, out of scope for this hook)."""
+        is outside every decoder's range (e.g. Pokemon Unlock / trap / filler —
+        handled by other client paths, out of scope for this hook)."""
         off = item_id - CLIENT_ITEM_OFFSET
         if TYPE_ITEM_OFFSET <= off < TYPE_ITEM_OFFSET + len(CLIENT_TYPE_NAMES_ORDERED):
             return "type"
+        if (USEFUL_ITEM_OFFSET < off
+                <= USEFUL_ITEM_OFFSET + len(CLIENT_USEFUL_ITEM_NAMES_ORDERED)):
+            return "useful"
         if REGION_PASS_OFFSET <= off < REGION_PASS_OFFSET + len(CLIENT_REGION_NAMES_ORDERED):
             return "region"
         if GATE_ITEM_OFFSET <= off < GATE_ITEM_OFFSET + 100:
@@ -174,6 +195,12 @@ class _ClientDecoder:
         off = item_id - CLIENT_ITEM_OFFSET
         if category == "type":
             return CLIENT_TYPE_NAMES_ORDERED[off - TYPE_ITEM_OFFSET] + " Type Key"
+        if category == "useful":
+            # Client decodeUsefulItem: idx = id - (ITEM_OFFSET + USEFUL_ITEM_OFFSET) - 1
+            idx = off - USEFUL_ITEM_OFFSET - 1
+            if 0 <= idx < len(self._useful_names):
+                return self._useful_names[idx]
+            return None
         if category == "region":
             return CLIENT_REGION_NAMES_ORDERED[off - REGION_PASS_OFFSET] + " Pass"
         if category == "gate":
@@ -183,6 +210,21 @@ class _ClientDecoder:
         if category == "line":
             return self.line_base_to_name.get(off - LINE_UNLOCK_OFFSET)
         return None
+
+    def check(self, item_id, real_name):
+        """Run the hook's decode check for one placed item. Returns a mismatch
+        description when the client would render item_id as something other than
+        ``real_name``, or None when it matches or the ID is out of scope. This is
+        the single comparison the fuzzer applies, factored out so the unit tests
+        can exercise it directly (including the BUG-24 negative control)."""
+        category = self.category(item_id)
+        if category is None:
+            return None
+        decoded = self.decode(category, item_id)
+        if decoded == real_name:
+            return None
+        return (f"[{category}] id={item_id} real={real_name!r} "
+                f"client_decoded={decoded!r}")
 
 
 class Hook(BaseHook):
@@ -258,17 +300,14 @@ class Hook(BaseHook):
                     continue
                 checked += 1
                 per_cat[cat] = per_cat.get(cat, 0) + 1
-                decoded = decoder.decode(cat, item.code)
-                if decoded != item.name:
-                    mismatches.append(
-                        f"[{cat}] id={item.code} real={item.name!r} "
-                        f"client_decoded={decoded!r}"
-                    )
+                mismatch = decoder.check(item.code, item.name)
+                if mismatch is not None:
+                    mismatches.append(mismatch)
 
             if _STATS_PATH:
                 # Line-sized append; atomic enough across worker processes on Linux.
                 cats = " ".join(str(per_cat.get(c, 0))
-                                for c in ("route", "line", "region", "type", "gate"))
+                                for c in ("route", "line", "region", "type", "gate", "useful"))
                 with open(_STATS_PATH, "a", encoding="utf-8") as fd:
                     fd.write(f"{checked} {cats}\n")
 
