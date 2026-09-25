@@ -507,11 +507,12 @@ class HideSpoilers(Toggle):
 
 class GuessLanguage(Choice):
     """Default language the client's guess input accepts for this slot.
-    'global' (default) accepts any language the client knows. The player can
-    still override it with the site's language selector -- this only sets the
-    initial preference, which is handy for streamers (e.g. catch by German
-    names for the streamer while the audience guesses in English) or as a
-    per-game default in multiworlds. Client-side only: has no effect on
+    'global' (default) accepts any language the client knows. This sets the
+    starting guess language only for players who have not picked one on the
+    site; once a player chooses a language there, that choice always wins and
+    the YAML option no longer applies. Handy for streamers (e.g. catch by
+    German names for the streamer while the audience guesses in English) or as
+    a per-game default in multiworlds. Client-side only: has no effect on
     generation or logic."""
     display_name = "Guess Language"
     option_global = 0
