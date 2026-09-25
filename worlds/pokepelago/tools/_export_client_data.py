@@ -3,10 +3,12 @@
 Output location: pass the client's ``src/data`` directory as the first CLI arg,
 or set ``POKEPELAGO_CLIENT_DATA_DIR``. Falls back to the historical Windows dev
 path when neither is given (so existing muscle-memory invocations still work).
-Example on Atlas::
+Example::
 
-    python -m worlds.pokepelago.tools._export_client_data \
-        /home/stef/projects/PokepelagoClient/src/data
+    python -m worlds.pokepelago.tools._export_client_data <client checkout>/src/data
+
+To regenerate every client data file at once (this plus pokemon_gates.ts), or to
+check a client checkout for drift, use ``tools/export_to_client.py``.
 """
 import json, os, sys
 from pathlib import Path
@@ -121,9 +123,8 @@ output = {
     "badgeRequirements": badge_requirements,
 }
 
-if __name__ == "__main__":
-    _arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("POKEPELAGO_CLIENT_DATA_DIR")
-    out_dir = Path(_arg) if _arg else Path("D:/pythonProjects/PokepelagoClient/src/data")
+def write_route_data(out_dir: Path, pretty: bool = True) -> Path:
+    """Write route_data.json (and optionally route_data_pretty.json) into ``out_dir``."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
     out_path = out_dir / "route_data.json"
@@ -131,7 +132,15 @@ if __name__ == "__main__":
     size_kb = out_path.stat().st_size / 1024
     print(f"Wrote {out_path} ({size_kb:.0f} KB)")
 
-    # Also human-readable version for inspection
-    out_pretty = out_dir / "route_data_pretty.json"
-    out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
-    print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")
+    if pretty:
+        # Also human-readable version for inspection
+        out_pretty = out_dir / "route_data_pretty.json"
+        out_pretty.write_text(json.dumps(output, indent=2), encoding="utf-8")
+        print(f"Wrote {out_pretty} ({out_pretty.stat().st_size / 1024:.0f} KB)")
+    return out_path
+
+
+if __name__ == "__main__":
+    _arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("POKEPELAGO_CLIENT_DATA_DIR")
+    out_dir = Path(_arg) if _arg else Path("D:/pythonProjects/PokepelagoClient/src/data")
+    write_route_data(out_dir)
