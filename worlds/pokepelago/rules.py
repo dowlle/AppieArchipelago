@@ -7,16 +7,43 @@ used for milestone locations and the victory condition.
 from __future__ import annotations
 
 import dataclasses
+import sys
 from typing import TYPE_CHECKING, ClassVar
 
 from typing_extensions import override
 
 from BaseClasses import CollectionState
 from NetUtils import JSONMessagePart
-from rule_builder.rules import Rule
+from rule_builder.rules import CustomRuleRegister, Rule
 
 if TYPE_CHECKING:
     from worlds.pokepelago import PokepelagoWorld
+
+
+def purge_orphaned_resolved_rules() -> int:
+    """Drop interned resolved rules that nothing references any more.
+
+    rule_builder interns every resolved rule in the process-global
+    ``CustomRuleRegister.resolved_rules`` dict and never removes them. A
+    Pokepelago generation resolves thousands of option-dependent rules, so a
+    long-lived process that generates many seeds (a fuzzer worker, for example)
+    grows by a few MB per seed until it runs out of memory.
+
+    An entry whose only reference is the dict itself belongs to a finished
+    generation. Dropping it only gives up de-duplication against that dead
+    generation; rules held by a live world are never touched. Iterating newest
+    first releases composite rules before the child rules they hold.
+    Returns the number of entries removed.
+    """
+    cache = CustomRuleRegister.resolved_rules
+    removed = 0
+    for key in reversed(list(cache)):
+        rule = cache[key]
+        # References: the dict value, the local `rule` and the getrefcount argument.
+        if sys.getrefcount(rule) <= 3:
+            del cache[key]
+            removed += 1
+    return removed
 
 
 @dataclasses.dataclass()

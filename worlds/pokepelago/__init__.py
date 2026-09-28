@@ -19,7 +19,7 @@ from .data import (POKEMON_DATA, GAME_REGIONS, GAME_GENERATIONS, REGION_RANGES, 
                    STONE_EVO_GROUPS)
 from .route_data import (ROUTE_DATA, ROUTE_GROUPS, ROUTE_TO_GROUP, POKEMON_ROUTES,
                          FAMILY_BASE, BADGE_LEVEL_THRESHOLDS, compute_badge_requirement)
-from .rules import CanAccessNPokemon
+from .rules import CanAccessNPokemon, purge_orphaned_resolved_rules
 # LEVER 1: importing logic_mixin registers PokepelagoLogicMixin via AutoLogicRegister
 # (it must be imported before any CollectionState is constructed) and exposes the
 # index builder + incremental-update helpers used by collect/remove below.
@@ -57,6 +57,13 @@ class PokepelagoWorld(World):
     item_name_groups = ITEM_NAME_GROUPS
 
     # ── Core generation pipeline ────────────────────────────────────────────────
+
+    @classmethod
+    def stage_generate_early(cls, multiworld) -> None:
+        # Runs once per generation, before any rules are resolved. Keeps
+        # rule_builder's global rule cache from growing across seeds in
+        # long-lived processes (see purge_orphaned_resolved_rules).
+        purge_orphaned_resolved_rules()
 
     def generate_early(self) -> None:
         # Universal Tracker re-generation: restore derived state from slot data
