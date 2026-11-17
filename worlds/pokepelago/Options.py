@@ -500,7 +500,10 @@ class HideSpoilers(Toggle):
     This stops hints and tracker location lists from giving away which Pokemon
     are available to guess. It is cosmetic only: location ids, logic, checks and
     item names are unchanged, so generation and completion are identical either way.
-    Useful for streams or shared screens. Off by default."""
+    Useful for streams or shared screens. Since datapackages are shared per game,
+    enabling hide_spoilers for any Pokepelago player applies Dex numbers to every
+    Pokepelago slot in that room. Universal Tracker still shows the real names.
+    Off by default."""
     display_name = "Hide Spoilers (Dex Numbers)"
     default = 0
 
